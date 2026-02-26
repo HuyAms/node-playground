@@ -16,10 +16,13 @@ function parseIntEnv(key: string, fallback: number): number {
   return parsed;
 }
 
+const env = requireEnv('NODE_ENV', 'development') as 'development' | 'production' | 'test';
+
 export const config = {
-  env: requireEnv('NODE_ENV', 'development') as 'development' | 'production' | 'test',
+  env,
   port: parseIntEnv('PORT', 3000),
   logLevel: requireEnv('LOG_LEVEL', 'info'),
+  logFile: env === 'development' ? 'logs/app.log' : undefined,
   rateLimit: {
     windowMs: parseIntEnv('RATE_LIMIT_WINDOW_MS', 60_000),
     max: parseIntEnv('RATE_LIMIT_MAX', 100),

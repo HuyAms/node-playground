@@ -1,6 +1,12 @@
+import fs from 'node:fs';
 import { createApp } from './app.js';
 import { config } from './config.js';
 import { logger } from './shared/logger.js';
+
+if (config.logFile) {
+  fs.mkdirSync('logs', { recursive: true });
+  fs.writeFileSync(config.logFile, '');
+}
 
 const app = createApp();
 
