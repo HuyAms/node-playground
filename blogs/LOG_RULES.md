@@ -105,13 +105,13 @@ Must not leak sensitive data.
 
 # 3. What NOT To Do
 
-❌ Log every successful GET at `info`
-❌ Log internal flow steps at `info`
-❌ Log the same event in controller + service + repository
-❌ Log raw request bodies
-❌ Log passwords, tokens, PII
-❌ Use `error` for validation failures
-❌ Log string-concatenated messages instead of structured fields
+- ❌ Log every successful GET at `info`
+- ❌ Log internal flow steps at `info`
+- ❌ Log the same event in controller + service + repository
+- ❌ Log raw request bodies
+- ❌ Log passwords, tokens, PII
+- ❌ Use `error` for validation failures
+- ❌ Log string-concatenated messages instead of structured fields
 
 Noise is operational debt.
 
