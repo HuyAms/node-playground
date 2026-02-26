@@ -29,29 +29,6 @@ Testing services in isolation — injecting a mock repository — is straightfor
 
 ---
 
-## Why a Repository Abstraction Without a Real Database
-
-The repository interface (`UserRepository`) defines a contract:
-
-```typescript
-interface UserRepository {
-  findAll(pagination: PaginationQuery): Promise<{ users: User[]; total: number }>;
-  findById(id: string): Promise<User | null>;
-  findByEmail(email: string): Promise<User | null>;
-  create(id: string, input: CreateUserInput, now: string): Promise<User>;
-  update(id: string, input: UpdateUserInput, updatedAt: string): Promise<User | null>;
-  delete(id: string): Promise<boolean>;
-}
-```
-
-The service depends on this interface, not on `InMemoryUserRepository`. When you add Postgres tomorrow, you write `PostgresUserRepository implements UserRepository` and swap the binding in `users.routes.ts`. The service, controller, and tests do not change.
-
-This is not over-engineering for its own sake. The in-memory implementation is genuinely useful now: it makes tests fast (no connection pools, no cleanup), it makes local development zero-dependency, and it forces the interface to be defined explicitly rather than inferred from whatever the ORM happens to expose.
-
-The decision to pass `id` and `now` into `create()` (rather than generating them inside the repository) is deliberate. It keeps the repository a pure data layer: it stores what it is given. UUID generation and timestamp creation are service-layer concerns because they may need to be testably controlled.
-
----
-
 ## Why Centralized Error Handling
 
 The alternative is try/catch in every controller with local serialization. That pattern fails in three ways:
@@ -78,19 +55,107 @@ The `pino-pretty` transport is used in development only. In production, raw JSON
 
 ---
 
-## Logging Level Strategy
+## Logging
 
-| Level   | When to use                                                                       |
-| ------- | --------------------------------------------------------------------------------- |
-| `info`  | Successful business operations: user created, user retrieved, user deleted.       |
-| `warn`  | Expected abnormal outcomes: user not found, duplicate email conflict.             |
-| `error` | Unexpected failures only. Emitted exclusively from the centralized error handler. |
+### Level Strategy
 
-`warn` is not `error`. A 404 is not a system failure — it is a caller mistake. Logging it at `error` level would drown real alerts in noise. In production, error-level logs should be rare enough to be worth a PagerDuty alert. Treat them that way.
+| Level   | When to use | Examples |
+| ------- | ----------- | -------- |
+| `debug` | Internal mechanics only an engineer debugging would care about — pre-condition checks, lookup starts, mid-operation state | `Looking up user by id`, `Checking email uniqueness`, `Persisting new user` |
+| `info`  | Completed state mutations worth counting in a dashboard — irreversible writes with an audit trail | `User created`, `User updated`, `User deleted` |
+| `warn`  | Expected failures — caller mistakes or domain conflicts that are normal operating conditions | `User not found`, `User creation conflict — email already exists` |
+| `error` | Unexpected crashes only. Emitted exclusively from the centralized error handler. | `Unhandled error` |
 
-`info` is emitted by the service layer, not the controller. The service is where the business event happened. The controller is just the delivery mechanism.
+`warn` is not `error`. A 404 is not a system failure — it is a caller mistake. Logging it at `error` level drowns real alerts in noise. In production, error-level logs should be rare enough to be worth a PagerDuty page.
 
-Sensitive fields (`authorization`, `cookie`, `password`, `token`) are redacted at the logger level via Pino's `redact` option. This applies globally — there is no per-log-statement discipline required.
+### Where Logs Belong by Layer
+
+| Layer | Logs? | Reason |
+| ----- | ----- | ------ |
+| Repository | No | Pure data layer with no business context. Logging here duplicates the service and conflates storage mechanics with outcomes. |
+| Controller | No | `pino-http` already records every request/response (method, url, statusCode, responseTime) automatically. |
+| Service | Yes — `debug`, `info`, `warn` | The only correct home for business logs. Never calls `logger.error()`. |
+| Error handler | Yes — `error` only | The single call site for unexpected failures. |
+
+This constraint matters: if `logger.error` appears outside the error handler, it is a sign that an expected failure is being misclassified.
+
+### `info` vs `debug` in the Service Layer
+
+The rule: **`info` is for writes, `debug` is for reads.**
+
+Read operations (`listUsers`, `getUserById`) log at `debug` on success. A successful GET fires constantly under normal load and carries no business signal — it is not an event worth counting. Write operations (`createUser`, `updateUser`, `deleteUser`) log at `info` on success. These are irreversible state changes that belong in an audit trail.
+
+In production at `logLevel=info`, the log stream contains exactly: every write outcome, every expected failure, every unexpected crash, and every HTTP request/response from `pino-http`. Read internals are suppressed.
+
+### What Over-Logging Looks Like
+
+```typescript
+// BAD: every internal step of a GET logged at info
+async getUserById(id: string): Promise<User> {
+  logger.info({ userId: id }, 'Looking up user');  // noise — fires on every GET
+  const user = await this.repo.findById(id);
+  logger.info({ userId: id }, 'User retrieved');   // noise — doubles the volume
+  return user;
+}
+```
+
+At 1,000 req/s this generates 2,000 `info` lines per second of low-signal noise, doubles log ingestion cost in Datadog/CloudWatch, and buries the writes that actually matter.
+
+### What Good Logging Looks Like
+
+```typescript
+// GOOD: reads are debug-only on success, warn on failure
+async getUserById(id: string): Promise<User> {
+  logger.debug({ requestId, userId: id }, 'Looking up user by id'); // suppressed in prod
+  const user = await this.repo.findById(id);
+  if (!user) {
+    logger.warn({ requestId, userId: id }, 'User not found');        // expected failure
+    throw new NotFoundError('User', id);
+  }
+  logger.debug({ requestId, userId: id }, 'User retrieved');         // suppressed in prod
+  return user;
+}
+
+// GOOD: write emits exactly one info line on success
+async createUser(input: CreateUserInput): Promise<User> {
+  logger.debug({ requestId, email: input.email }, 'Checking email uniqueness');
+  // ...conflict check emits warn + throws on conflict...
+  const user = await this.repo.create(id, input, now);
+  logger.info({ requestId, userId: user.id }, 'User created');       // one info, on success
+  return user;
+}
+```
+
+Structured fields (`userId`, `email`, `requestId`) — never string interpolation. Every log line is machine-queryable in a log aggregator without parsing.
+
+### Other Anti-Patterns to Avoid
+
+- **Logging full request or response bodies** — exposes PII and secrets even with field-level redaction configured elsewhere
+- **`console.log` anywhere** — bypasses the structured logger and produces unindexed plaintext
+- **`logger.error` for 404s or 409s** — poisons alerting thresholds; error-level logs should correlate with pages, not user mistakes
+- **String interpolation in log messages** — `logger.info(\`User ${id} not found\`)` is unsearchable; pass `id` as a field instead
+
+### Redaction
+
+`authorization`, `cookie`, `password`, and `token` are stripped globally in `src/shared/logger.ts` via Pino's `redact` option. This applies to every log statement in the process — there is no per-call discipline required. If a new sensitive field is added to the data model, it is registered once in the `redact.paths` array.
+
+### Transport Configuration
+
+In development, logs are piped through `pino-pretty` (colorized, human-readable timestamps). In production, the logger emits raw newline-delimited JSON to stdout for consumption by log aggregators (Datadog, CloudWatch, Loki). Switching is a config check on `config.env` — no code change. An optional `logFile` destination can be enabled via `config.logFile` without touching application logic.
+
+### Debugging Scenarios
+
+**Scenario 1 — Duplicate email 409 reported by a client**
+
+Filter your log aggregator by `requestId` from the response header. You'll find a `warn` line with `{ email, code: "CONFLICT" }` emitted by `UsersService.createUser` immediately before the HTTP response. The conflicting email is in the structured field — no log parsing needed.
+
+**Scenario 2 — `PATCH /users/:id` returns 404 unexpectedly**
+
+The `warn` log from `UsersService.updateUser` includes `{ userId }`. If the `userId` field matches the ID in the URL, the record genuinely does not exist. If it doesn't match, you have a routing or param-parsing bug — and you know that before touching the repository or database.
+
+**Scenario 3 — Intermittent 500 with no reproduction steps**
+
+The `error` log in `errorHandler` includes `{ err, method, url, requestId }` — full stack trace, the exact endpoint, and the request correlation ID. Filter by `requestId` to see the full request lifecycle: what pino-http recorded on entry, what the service was doing before the crash, and the stack at the point of failure. No additional instrumentation required.
 
 ---
 
@@ -125,51 +190,18 @@ Controllers use explicit `try/catch` with `next(err)` rather than relying on Exp
 
 ---
 
-## Pagination Design Decisions
+## What Can Be Improved
 
-**Why query params instead of cursor-based pagination?**
+**Real database.** Swap `InMemoryUserRepository` for a `PostgresUserRepository implements UserRepository`. The service, controller, and tests do not change — the interface contract absorbs the swap. Migration tooling (Flyway, node-pg-migrate) and a connection pool (pg, postgres.js) would be added at that point.
 
-Cursor-based pagination is correct for real-time feeds where rows are inserted frequently between pages. For a user management list, offset pagination is predictable, debuggable, and trivially implemented. It is the right tradeoff for this use case.
+**AsyncLocalStorage for `requestId`.** Currently `requestId` is threaded as an explicit function parameter through every service method. Node's `AsyncLocalStorage` makes it ambient: set it once in middleware, read it anywhere in the call tree without touching signatures. The explicit parameter is clearer at this scale; `AsyncLocalStorage` is the correct choice when call trees are deep or when third-party code sits between middleware and service.
 
-**Why coerce strings to numbers in Zod?**
+**Authentication and authorization.** A JWT verification middleware (`auth`) and a `requireRole` guard applied per route. The `User` type gains a `passwordHash` field that is excluded from all API responses and never appears in any log line (registered in `redact.paths`).
 
-Query parameters are always strings. `?page=2` arrives as `"2"`. Using `z.coerce.number()` handles this transparently and produces typed `number` output, so the rest of the stack never deals with strings in a numeric context.
+**OpenTelemetry tracing.** The existing `requestId` provides intra-service correlation. Distributed tracing (OTel + a collector) would extend that across service boundaries, providing span-level timing and dependency graphs. The structured log fields (`requestId`, `userId`) map cleanly onto OTel span attributes.
 
-**Why does the repository handle the slice?**
+**Dependency injection container.** Dependencies are wired manually in `users.routes.ts`. A container (tsyringe, inversify) becomes worthwhile when there are multiple feature modules with overlapping dependencies. At current scale, manual wiring is more transparent.
 
-This mirrors what you would do with a real database (SQL `LIMIT`/`OFFSET`). When `InMemoryUserRepository` is replaced with a Postgres implementation, the slice logic stays in the repository layer — the service does not change. If pagination were done in the service, the repository would have to return the full dataset on every request, which would be a performance regression when the backing store is real.
+**Input sanitization.** Zod validates structure and types; it does not strip HTML. If user-provided strings are ever rendered in a browser context, a server-side sanitization pass (DOMPurify/jsdom, or a strip-tags library) would be added before persistence.
 
-**Why does `totalPages` compute to at least 1?**
-
-`Math.ceil(0 / 10)` is `0`, which would tell the client there are zero pages — including the page they just got. When the store is empty, there is one page (page 1, with zero items). `|| 1` prevents the off-by-one.
-
----
-
-## Tradeoffs Made
-
-**No dependency injection container.** Dependencies are wired manually in `users.routes.ts`. A container (tsyringe, inversify) adds boilerplate and indirection for a single feature module. The manual wiring is explicit and testable by passing fake implementations directly.
-
-**No request-scoped logger child.** The `requestId` is threaded as a function parameter rather than using AsyncLocalStorage to make it ambient. AsyncLocalStorage is the production-correct approach but adds complexity. The explicit parameter makes the dependency visible in function signatures, which is preferable at this scale.
-
-**`userRepository` is a module singleton.** Tests share state between test cases unless they avoid mutating seed records. Test cases that create users use unique emails. Test cases that delete users create a throwaway user first. This is a deliberate tradeoff: keeping the repository a singleton avoids rebuilding the app per test, which keeps the suite fast.
-
-**No authentication or authorization.** Out of scope for this exercise. Adding it would mean an `auth` middleware (JWT verification), a `requireRole` guard applied per route, and extending the `User` type with a `passwordHash` field that is never logged or returned in API responses.
-
-**No input sanitization beyond Zod.** Zod validates structure and types; it does not sanitize HTML or prevent injection. With a real database, parameterized queries handle injection. With user-provided content that could be rendered as HTML, a sanitization step (DOMPurify server-side, or a strip-tags library) would be added before persistence.
-
----
-
-## What Was Intentionally Not Implemented and Why
-
-| Omission | Reason |
-|---|---|
-| Real database | Adds infrastructure dependency without changing the API's structural decisions |
-| JWT authentication | Auth is a cross-cutting concern; adding it would obscure the architecture patterns being demonstrated |
-| Migrations / schema management | No persistence layer |
-| CI/CD pipeline | Infrastructure concern, outside scope |
-| Docker / docker-compose | Same — infrastructure |
-| Cursor-based pagination | Offset pagination is appropriate for static, admin-style lists |
-| AsyncLocalStorage for requestId | Explicit threading is clearer at this scale; AsyncLocalStorage would be the production choice for deep call trees |
-| Request ID in success response body | The ID is in the response header (`x-request-id`), which is the correct HTTP idiom. Embedding it in every response body would couple the client to infrastructure concerns |
-| Compression middleware | A concern for the reverse proxy (nginx/ALB), not the application server |
-| OpenTelemetry tracing | Correct for production but would double the complexity of this demonstration |
+**Cursor-based pagination.** Offset pagination is correct for static admin lists. If the user list becomes a high-write, real-time feed where rows are inserted between page loads, cursor-based pagination eliminates the skipped-row problem that offset pagination cannot solve.

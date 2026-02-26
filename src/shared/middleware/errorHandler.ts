@@ -27,6 +27,7 @@ export function errorHandler(
   const requestId = req.headers['x-request-id'] as string | undefined;
 
   if (err instanceof AppError) {
+    logger.warn({ requestId, code: err.code, statusCode: err.statusCode }, err.message);
     res.status(err.statusCode).json(err.serialize(requestId));
     return;
   }
