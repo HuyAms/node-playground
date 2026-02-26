@@ -7,15 +7,14 @@ import { logger } from '../logger.js';
  * serialized to HTTP responses. Key invariants:
  *
  * 1. AppError subclasses are "operational" — known failure modes.
- *    They are warned at warn level (already logged by the service layer)
- *    and surfaced to the client with their designated status code.
+ *    The throw site (service or validate middleware) owns the warn log with
+ *    business context. This handler only serializes the HTTP response.
  *
  * 2. Everything else is an unexpected failure.
  *    Log at error level (with full stack) and respond 500.
  *    We deliberately do NOT expose internal error messages to clients.
  *
  * 3. This is the ONLY place logger.error() is called.
- *    Service/repository layers use info/warn only.
  */
 export function errorHandler(
   err: unknown,
@@ -27,7 +26,6 @@ export function errorHandler(
   const requestId = req.headers['x-request-id'] as string | undefined;
 
   if (err instanceof AppError) {
-    logger.warn({ requestId, code: err.code, statusCode: err.statusCode }, err.message);
     res.status(err.statusCode).json(err.serialize(requestId));
     return;
   }

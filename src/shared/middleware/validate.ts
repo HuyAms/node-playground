@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodSchema, ZodError } from 'zod';
 import { ValidationError, FieldError } from '../errors/index.js';
+import { logger } from '../logger.js';
 
 type RequestPart = 'body' | 'query' | 'params';
 
@@ -16,6 +17,8 @@ export function validate(schema: ZodSchema, part: RequestPart = 'body') {
 
     if (!result.success) {
       const fields = mapZodError(result.error);
+      const requestId = req.headers['x-request-id'] as string | undefined;
+      logger.warn({ requestId, part, fields }, 'Request validation failed');
       return next(new ValidationError(fields));
     }
 

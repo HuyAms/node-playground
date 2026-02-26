@@ -30,7 +30,7 @@ export const logger = pino(
       bindings: () => ({}),
     },
     redact: {
-      paths: ['req.headers.authorization', 'req.headers.cookie', '*.password', '*.token'],
+      paths: ['req.headers.authorization', 'req.headers.cookie', '*.password', '*.token', '*.email'],
       censor: '[REDACTED]',
     },
   },
@@ -44,8 +44,6 @@ export const httpLogger = pinoHttp({
   customProps: (req) => ({
     requestId: req.headers['x-request-id'],
   }),
-  // Suppress noisy health-check routes if added later
-  customReceivedMessage: (req) => `request received: ${req.method} ${req.url}`,
   autoLogging: {
     ignore: (req) => req.url === '/health' || (req.url?.startsWith('/docs') ?? false),
   },
