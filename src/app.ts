@@ -5,11 +5,12 @@ import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
 
 import { config } from './config.js';
+import { registry } from './shared/metrics.js';
 import { httpLogger } from './shared/logger.js';
 import { requestId } from './shared/middleware/requestId.js';
 import { errorHandler } from './shared/middleware/errorHandler.js';
 import { usersRouter } from './modules/users/users.routes.js';
-import { swaggerSpec } from '../docs/swagger.js';
+import { swaggerSpec } from './docs/swagger.js';
 
 export function createApp(): express.Application {
   const app = express();
@@ -57,6 +58,14 @@ export function createApp(): express.Application {
   // ------------------------------------------------------------------
   app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
   app.get('/docs.json', (_req, res) => res.json(swaggerSpec));
+
+  // ------------------------------------------------------------------
+  // Metrics — scraped by Prometheus every 15s
+  // ------------------------------------------------------------------
+  app.get('/metrics', async (_req, res) => {
+    res.set('Content-Type', registry.contentType);
+    res.end(await registry.metrics());
+  });
 
   // ------------------------------------------------------------------
   // Health check (intentionally simple — no auth, no business logic)
