@@ -9,6 +9,7 @@ import { registry } from './shared/metrics.js';
 import { httpLogger } from './shared/logger.js';
 import { requestId } from './shared/middleware/requestId.js';
 import { errorHandler } from './shared/middleware/errorHandler.js';
+import { httpMetrics } from './shared/middleware/httpMetrics.js';
 import { usersRouter } from './modules/users/users.routes.js';
 import { swaggerSpec } from './docs/swagger.js';
 
@@ -47,6 +48,7 @@ export function createApp(): express.Application {
   // ------------------------------------------------------------------
   app.use(requestId);   // must come before httpLogger so pino picks up x-request-id
   app.use(httpLogger);
+  app.use(httpMetrics);
 
   // ------------------------------------------------------------------
   // Body parsing
