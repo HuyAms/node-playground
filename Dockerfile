@@ -1,3 +1,17 @@
+FROM node:22-alpine AS dev
+
+WORKDIR /app
+
+COPY package.json package-lock.json tsconfig.json ./
+RUN npm ci
+
+COPY src/ ./src/
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev"]
+
+
 FROM node:22-alpine AS builder
 
 WORKDIR /app
