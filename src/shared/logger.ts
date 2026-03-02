@@ -45,7 +45,7 @@ export const httpLogger = pinoHttp({
     requestId: req.headers['x-request-id'],
   }),
   autoLogging: {
-    ignore: (req) => req.url === '/health' || (req.url?.startsWith('/docs') ?? false),
+    ignore: (req) => req.url === '/health' || (req.url?.startsWith('/metrics') ?? false) || (req.url?.startsWith('/docs') ?? false),
   },
   serializers: {
     req(req) {
