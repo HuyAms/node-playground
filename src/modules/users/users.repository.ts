@@ -15,7 +15,7 @@ export interface UserRepository {
 // ---------------------------------------------------------------------------
 const SEED_USERS: User[] = [
   {
-    id: '11111111-0000-0000-0000-000000000001',
+    id: '1',
     name: 'Alice Nguyen',
     email: 'alice@example.com',
     role: 'admin',
@@ -23,7 +23,7 @@ const SEED_USERS: User[] = [
     updatedAt: '2024-01-10T08:00:00.000Z',
   },
   {
-    id: '11111111-0000-0000-0000-000000000002',
+    id: '2',
     name: 'Bob Chen',
     email: 'bob@example.com',
     role: 'editor',
@@ -31,7 +31,7 @@ const SEED_USERS: User[] = [
     updatedAt: '2024-01-11T09:15:00.000Z',
   },
   {
-    id: '11111111-0000-0000-0000-000000000003',
+    id: '3',
     name: 'Carol Smith',
     email: 'carol@example.com',
     role: 'viewer',
@@ -39,7 +39,7 @@ const SEED_USERS: User[] = [
     updatedAt: '2024-01-12T10:30:00.000Z',
   },
   {
-    id: '11111111-0000-0000-0000-000000000004',
+    id: '4',
     name: 'David Kim',
     email: 'david@example.com',
     role: 'editor',
@@ -47,7 +47,7 @@ const SEED_USERS: User[] = [
     updatedAt: '2024-01-13T11:00:00.000Z',
   },
   {
-    id: '11111111-0000-0000-0000-000000000005',
+    id: '5',
     name: 'Eva Martinez',
     email: 'eva@example.com',
     role: 'viewer',
@@ -55,7 +55,7 @@ const SEED_USERS: User[] = [
     updatedAt: '2024-01-14T12:00:00.000Z',
   },
   {
-    id: '11111111-0000-0000-0000-000000000006',
+    id: '6',
     name: 'Frank Obi',
     email: 'frank@example.com',
     role: 'admin',
@@ -63,7 +63,7 @@ const SEED_USERS: User[] = [
     updatedAt: '2024-01-15T13:00:00.000Z',
   },
   {
-    id: '11111111-0000-0000-0000-000000000007',
+    id: '7',
     name: 'Grace Lee',
     email: 'grace@example.com',
     role: 'viewer',
@@ -71,7 +71,7 @@ const SEED_USERS: User[] = [
     updatedAt: '2024-01-16T14:00:00.000Z',
   },
   {
-    id: '11111111-0000-0000-0000-000000000008',
+    id: '8',
     name: 'Henry Park',
     email: 'henry@example.com',
     role: 'editor',
@@ -79,7 +79,7 @@ const SEED_USERS: User[] = [
     updatedAt: '2024-01-17T15:00:00.000Z',
   },
   {
-    id: '11111111-0000-0000-0000-000000000009',
+    id: '9',
     name: 'Irene Walsh',
     email: 'irene@example.com',
     role: 'viewer',
@@ -87,7 +87,7 @@ const SEED_USERS: User[] = [
     updatedAt: '2024-01-18T16:00:00.000Z',
   },
   {
-    id: '11111111-0000-0000-0000-000000000010',
+    id: '10',
     name: 'James Torres',
     email: 'james@example.com',
     role: 'editor',
@@ -102,6 +102,7 @@ const SEED_USERS: User[] = [
 export class InMemoryUserRepository implements UserRepository {
   // Shallow-copy seed so tests that reset module state start clean
   private store: User[] = SEED_USERS.map((u) => ({ ...u }));
+  private nextId = SEED_USERS.length + 1;
 
   async findAll(pagination: PaginationQuery): Promise<{ users: User[]; total: number }> {
     const total = this.store.length;
@@ -118,9 +119,9 @@ export class InMemoryUserRepository implements UserRepository {
     return this.store.find((u) => u.email === email) ?? null;
   }
 
-  async create(id: string, input: CreateUserInput, now: string): Promise<User> {
+  async create(_id: string, input: CreateUserInput, now: string): Promise<User> {
     const user: User = {
-      id,
+      id: String(this.nextId++),
       name: input.name,
       email: input.email,
       role: input.role,

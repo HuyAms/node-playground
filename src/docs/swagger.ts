@@ -54,7 +54,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
                 example: {
                   data: [
                     {
-                      id: '11111111-0000-0000-0000-000000000001',
+                      id: '1',
                       name: 'Alice Nguyen',
                       email: 'alice@example.com',
                       role: 'admin',
@@ -204,8 +204,8 @@ export const swaggerSpec: OpenAPIV3.Document = {
           name: 'id',
           in: 'path',
           required: true,
-          description: 'User ID (UUID)',
-          schema: { type: 'string', format: 'uuid' },
+          description: 'User ID',
+          schema: { type: 'string', example: '1' },
         },
       ],
       get: {
@@ -282,7 +282,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
         type: 'object',
         required: ['id', 'name', 'email', 'role', 'createdAt', 'updatedAt'],
         properties: {
-          id: { type: 'string', format: 'uuid', example: '11111111-0000-0000-0000-000000000001' },
+          id: { type: 'string', example: '1' },
           name: { type: 'string', example: 'Alice Nguyen' },
           email: { type: 'string', format: 'email', example: 'alice@example.com' },
           role: { $ref: '#/components/schemas/UserRole' },
