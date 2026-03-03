@@ -26,6 +26,18 @@ services:
       - --web.enable-lifecycle
     restart: unless-stopped
 
+  k6:
+    image: grafana/k6:latest
+    profiles: [load]
+    volumes:
+      - ./scripts:/scripts
+    environment:
+      - K6_BASE_URL=http://app:3000
+      - DURATION=${DURATION:-999h}
+    depends_on:
+      - app
+    command: run /scripts/load.js
+
   grafana:
     image: grafana/grafana:10.4.2
     ports:
