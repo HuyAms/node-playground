@@ -4,8 +4,19 @@ import { User, CreateUserInput, UpdateUserInput } from './users.schema.js';
 import { PaginationQuery, PaginatedResult, buildPaginationMeta } from '../../shared/types/pagination.js';
 import { NotFoundError, ConflictError } from '../../shared/errors/index.js';
 import { logger } from '../../shared/logger.js';
+import { cacheHitsTotal, cacheMissesTotal, cacheSize } from '../../shared/metrics.js';
+
+const CACHE_NAME = 'users';
+const CACHE_TTL_MS = 30_000;
+
+interface CacheEntry {
+  user: User;
+  expiresAt: number;
+}
 
 export class UsersService {
+  private readonly cache = new Map<string, CacheEntry>();
+
   constructor(private readonly repo: UserRepository) {}
 
   async listUsers(
@@ -22,6 +33,15 @@ export class UsersService {
 
   async getUserById(id: string, requestId?: string): Promise<User> {
     logger.debug({ requestId, userId: id }, 'Looking up user by id');
+
+    const cached = this.cache.get(id);
+    if (cached && cached.expiresAt > Date.now()) {
+      cacheHitsTotal.inc({ cache: CACHE_NAME });
+      logger.debug({ requestId, userId: id }, 'User cache hit');
+      return cached.user;
+    }
+
+    cacheMissesTotal.inc({ cache: CACHE_NAME });
     const user = await this.repo.findById(id);
 
     if (!user) {
@@ -29,7 +49,9 @@ export class UsersService {
       throw new NotFoundError('User', id);
     }
 
-    logger.debug({ requestId, userId: id }, 'User retrieved');
+    this.cache.set(id, { user, expiresAt: Date.now() + CACHE_TTL_MS });
+    cacheSize.set({ cache: CACHE_NAME }, this.cache.size);
+    logger.debug({ requestId, userId: id }, 'User retrieved and cached');
     return user;
   }
 
@@ -69,6 +91,8 @@ export class UsersService {
       throw new NotFoundError('User', id);
     }
 
+    this.cache.delete(id);
+    cacheSize.set({ cache: CACHE_NAME }, this.cache.size);
     logger.info({ requestId, userId: id }, 'User updated');
     return user;
   }
@@ -82,6 +106,8 @@ export class UsersService {
       throw new NotFoundError('User', id);
     }
 
+    this.cache.delete(id);
+    cacheSize.set({ cache: CACHE_NAME }, this.cache.size);
     logger.info({ requestId, userId: id }, 'User deleted');
   }
 }
