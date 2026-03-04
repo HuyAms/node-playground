@@ -19,6 +19,21 @@ function buildStreams(): pino.StreamEntry[] {
     streams.push({ level, stream: pino.destination(config.logFile) });
   }
 
+  if (config.lokiUrl) {
+    streams.push({
+      level,
+      stream: pino.transport({
+        target: 'pino-loki',
+        options: {
+          host: config.lokiUrl,
+          labels: { job: 'node-playground' },
+          batching: { interval: 1 },
+          silenceErrors: false,
+        },
+      }),
+    });
+  }
+
   return streams;
 }
 
