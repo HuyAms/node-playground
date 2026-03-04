@@ -5,7 +5,7 @@ export type UserRole = z.infer<typeof UserRole>;
 
 /** The persisted User shape — what lives in the repository */
 export const userSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string(),
   name: z.string(),
   email: z.string().email(),
   role: UserRole,

@@ -19,6 +19,21 @@ function buildStreams(): pino.StreamEntry[] {
     streams.push({ level, stream: pino.destination(config.logFile) });
   }
 
+  if (config.lokiUrl) {
+    streams.push({
+      level,
+      stream: pino.transport({
+        target: 'pino-loki',
+        options: {
+          host: config.lokiUrl,
+          labels: { job: 'node-playground' },
+          batching: { interval: 1 },
+          silenceErrors: false,
+        },
+      }),
+    });
+  }
+
   return streams;
 }
 
@@ -45,7 +60,7 @@ export const httpLogger = pinoHttp({
     requestId: req.headers['x-request-id'],
   }),
   autoLogging: {
-    ignore: (req) => req.url === '/health' || (req.url?.startsWith('/docs') ?? false),
+    ignore: (req) => req.url === '/health' || (req.url?.startsWith('/metrics') ?? false) || (req.url?.startsWith('/docs') ?? false),
   },
   serializers: {
     req(req) {

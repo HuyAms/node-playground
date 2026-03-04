@@ -23,7 +23,7 @@ export function validate(schema: ZodSchema, part: RequestPart = 'body') {
     }
 
     // Mutate the request part with the coerced/transformed value
-    (req as Record<string, unknown>)[part] = result.data;
+    (req as unknown as Record<string, unknown>)[part] = result.data;
     next();
   };
 }

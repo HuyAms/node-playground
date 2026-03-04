@@ -1,10 +1,72 @@
 services:
   app:
-    build: .
+    build:
+      context: .
+      target: dev
     ports:
-      - "3000:3000"
+      - '3000:3000'
     env_file:
       - .env
+    environment:
+      - LOKI_URL=http://loki:3100
     volumes:
+      - ./src:/app/src
       - ./logs:/app/logs
+    depends_on:
+      - loki
     restart: unless-stopped
+
+  loki:
+    image: grafana/loki:2.9.4
+    ports:
+      - '3100:3100'
+    volumes:
+      - loki_data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.51.2
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    restart: unless-stopped
+
+  k6:
+    image: grafana/k6:latest
+    profiles: [load]
+    volumes:
+      - ./scripts:/scripts
+    environment:
+      - K6_BASE_URL=http://app:3000
+      - DURATION=${DURATION:-999h}
+    depends_on:
+      - app
+    command: run /scripts/load.js
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    ports:
+      - '3001:3000'
+    depends_on:
+      - loki
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:

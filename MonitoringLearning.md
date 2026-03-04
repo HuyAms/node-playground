@@ -1,0 +1,380 @@
+# Prometheus & Grafana — Learning Project
+
+## Goal
+
+Learn Prometheus and Grafana by building real observability into this Node.js/Express app from scratch — no shortcuts, no copy-paste configs. Every metric we add teaches a concept. Every PromQL query we write answers a real question about the running system.
+
+## What you will be able to do after this
+
+- Explain what Prometheus is and how it scrapes metrics from an app
+- Explain what Grafana is and how it connects to Prometheus
+- Know the 4 metric types (Counter, Gauge, Histogram, Summary) and when to use each
+- Write PromQL queries: `rate()`, `histogram_quantile()`, `sum by()`, label filtering
+- Build a Grafana dashboard from scratch with Time Series, Stat, Gauge, and Heatmap panels
+- Write Prometheus alert rules and understand the PENDING → FIRING lifecycle
+- Know what you get for free vs what you need to instrument yourself
+
+---
+
+## Project context
+
+**Stack:** Node.js + Express + TypeScript  
+**Current state:** Phase 1 ✅ complete. PromQL basics covered — Gauge, Counter+rate(), Histogram+histogram_quantile().  
+**Next:** Phase 2 — Counter + Gauge: HTTP traffic middleware.
+
+```
+src/
+  app.ts                     ← Express app factory, mount middleware here
+  server.ts                  ← Entry point, graceful shutdown
+  shared/
+    logger.ts                ← Pino logger (already wired)
+    middleware/
+      requestId.ts           ← x-request-id header middleware
+      errorHandler.ts        ← Centralized error handler
+  modules/
+    users/                   ← CRUD: routes, controller, service, repository, schema
+docker-compose.yml           ← Only has the `app` service right now
+prometheus/                  ← Empty, we fill this
+grafana/                     ← Empty, we fill this
+```
+
+---
+
+## How Prometheus + Grafana work together
+
+```
+Express App (:3000/metrics)  ──scrape every 5s──▶  Prometheus (:9090)
+                                                          │
+                                               PromQL queries
+                                                          │
+                                                          ▼
+                                                  Grafana (:3001)
+```
+
+- **Prometheus** pulls (scrapes) `GET /metrics` from your app on a schedule and stores the time-series data in its own TSDB.
+- **Grafana** is a dashboard UI. It sends PromQL queries to Prometheus and renders the results as panels.
+- You write PromQL in both places: the Prometheus UI (for exploration) and Grafana (for dashboards).
+
+---
+
+## The 4 metric types
+
+| Type          | Goes down? | Use for                                    | PromQL                                  |
+| ------------- | ---------- | ------------------------------------------ | --------------------------------------- |
+| **Counter**   | Never      | Total requests, errors, cache misses       | `rate()`, `increase()`                  |
+| **Gauge**     | Yes        | Heap used, in-flight requests, queue depth | Raw value, no `rate()` needed           |
+| **Histogram** | N/A        | Request duration, DB query time            | `histogram_quantile()`                  |
+| **Summary**   | N/A        | Client-side quantiles                      | Avoid — can't aggregate across replicas |
+
+---
+
+## What's free vs what we build
+
+`collectDefaultMetrics` (one function call) gives 30+ metrics with zero instrumentation:
+
+| Free metric                         | Type      | Good for learning                         |
+| ----------------------------------- | --------- | ----------------------------------------- |
+| `nodejs_heap_size_used_bytes`       | Gauge     | Gauge concept — snapshot of current state |
+| `nodejs_eventloop_lag_p99_seconds`  | Gauge     | Event loop blocking detection             |
+| `nodejs_gc_duration_seconds_bucket` | Histogram | Histogram bucket structure                |
+| `process_cpu_seconds_total`         | Counter   | Counter + `rate()` concept                |
+
+**We build only what's missing** — there are no HTTP-level metrics out of the box:
+
+| Custom metric                                   | Type      | Phase   |
+| ----------------------------------------------- | --------- | ------- |
+| `http_requests_total{method,route,status_code}` | Counter   | Phase 2 |
+| `http_requests_in_flight{method}`               | Gauge     | Phase 2 |
+| `http_request_duration_seconds`                 | Histogram | Phase 3 |
+| `cache_hits_total{cache}`                       | Counter   | Phase 4 |
+| `cache_misses_total{cache}`                     | Counter   | Phase 4 |
+| `cache_size{cache}`                             | Gauge     | Phase 4 |
+
+---
+
+## Build plan
+
+### Task 0 — Setup ✅ DONE
+
+Install `prom-client`, expose `GET /metrics`, add Prometheus + Grafana to Docker Compose.
+
+Files to create:
+
+- `src/shared/metrics.ts` — Registry + `collectDefaultMetrics` only
+- Add `/metrics` route to `src/app.ts`
+- Add `prometheus` + `grafana` services to `docker-compose.yml`
+- `prometheus/prometheus.yml` — scrape config (target: `app:3000`, interval: 15s)
+- `grafana/provisioning/datasources/prometheus.yml` — auto-wire Grafana → Prometheus
+- `docker compose up --build`
+
+**Verify:**
+
+```bash
+# Raw metric output from the app
+curl http://localhost:3000/metrics | grep nodejs_heap
+
+# Prometheus scraped it successfully — should show state="up"
+curl -s http://localhost:9090/api/v1/targets | python3 -m json.tool | grep '"health"'
+
+# Grafana is reachable
+curl -s http://localhost:3001/api/health
+```
+
+Open `http://localhost:9090/targets` — the `node-playground` target must show **State: UP** (green). If it shows DOWN, Prometheus can't reach the app.
+
+---
+
+### Phase 1 — Explore free metrics + PromQL basics (no new code) ✅ DONE
+
+Use the 30+ free default metrics to learn PromQL syntax before writing any custom instrumentation.
+
+Key queries to run in `http://localhost:9090`:
+
+```promql
+nodejs_heap_size_used_bytes
+nodejs_eventloop_lag_p99_seconds
+rate(process_cpu_seconds_total[1m])
+histogram_quantile(0.99, rate(nodejs_gc_duration_seconds_bucket[5m]))
+```
+
+Build first Grafana Stat panel: live heap usage.
+
+**Learn:** Gauge vs Counter vs Histogram syntax. Why `rate()` transforms a Counter into something useful. How `histogram_quantile()` works on the free GC histogram.
+
+**Verify:**
+
+- Run each of the 4 queries above in the Prometheus UI — all must return a numeric result (not empty)
+- `nodejs_gc_duration_seconds_bucket` — click the **Table** tab, confirm you see multiple rows with different `le` values (those are the buckets)
+- Grafana `http://localhost:3001` → Explore → select Prometheus datasource → run `nodejs_heap_size_used_bytes` → graph should update every 15s
+- First Grafana Stat panel shows a number (bytes), refreshes automatically
+
+---
+
+### Phase 2 — Counter + Gauge: HTTP traffic middleware
+
+**Why:** No default metric tracks requests per route/status or concurrent in-flight HTTP connections.
+
+Files to create/modify:
+
+- Add `http_requests_total` (Counter) + `http_requests_in_flight` (Gauge) to `src/shared/metrics.ts`
+- Create `src/shared/middleware/httpMetrics.ts` — increment on request start/finish
+- Mount in `src/app.ts`
+
+Key PromQL:
+
+```promql
+rate(http_requests_total[5m])
+rate(http_requests_total{status_code="404"}[5m])
+http_requests_in_flight
+```
+
+**Learn:** Counter never goes down — `rate()` is what you alert on. Gauge is already a snapshot — query it raw. Label cardinality: use `req.route?.path` (Express pattern) not the real URL or you get one time series per user ID.
+
+**Verify:**
+
+```bash
+# Generate some traffic
+curl http://localhost:3000/users
+curl http://localhost:3000/users/does-not-exist
+curl http://localhost:3000/health
+
+# Check the raw metric text
+curl -s http://localhost:3000/metrics | grep http_requests_total
+```
+
+Expected output contains lines like:
+
+```
+http_requests_total{method="GET",route="/users",status_code="200",...} 1
+http_requests_total{method="GET",route="unknown",status_code="404",...} 1
+```
+
+In Prometheus UI: `http_requests_total` must return at least 2 series with different `route` labels. `http_requests_in_flight` should show `0` between requests (spike to 1+ during a slow request).
+
+---
+
+### Phase 3 — Histogram: HTTP request latency
+
+**Why:** The free GC histogram rarely fires during dev — you can't experiment with it. HTTP latency fires on every request.
+
+Extend `src/shared/middleware/httpMetrics.ts` — add `startTimer()` / `stopTimer()`. Add `http_request_duration_seconds` Histogram to `src/shared/metrics.ts` with buckets tuned for REST APIs.
+
+Key PromQL:
+
+```promql
+histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
+histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))
+rate(http_request_duration_seconds_sum[5m]) / rate(http_request_duration_seconds_count[5m])
+```
+
+**Learn:** Prometheus auto-generates `_bucket`, `_sum`, `_count` from one Histogram definition. `le` is the bucket boundary label. P95 vs average — averages hide the worst 5% of your users.
+
+**Verify:**
+
+```bash
+# Confirm all 3 auto-generated series exist
+curl -s http://localhost:3000/metrics | grep http_request_duration_seconds | head -20
+```
+
+You must see lines with `_bucket`, `_sum`, and `_count` suffixes. In Prometheus UI:
+
+- `http_request_duration_seconds_bucket` → Table view → multiple rows with `le="0.005"`, `le="0.01"`, etc.
+- `histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))` → returns a number in seconds (e.g. `0.003`)
+- Grafana Time Series panel shows three lines (P50 / P95 / P99) all rendering without errors
+
+---
+
+### Phase 4 — Cache layer + /simulate routes
+
+Add features that make all metrics interesting and controllable.
+
+**In-memory cache on `GET /users/:id`:**
+
+- `Map<string, {user, expiresAt}>` with 30s TTL in `src/modules/users/users.service.ts`
+- Track `cache_hits_total`, `cache_misses_total` (Counters), `cache_size` (Gauge)
+
+**New `/simulate` module (`src/modules/simulate/`):**
+
+- `GET /simulate/slow?ms=500` — artificial delay, makes P95 spike visibly
+- `GET /simulate/error?rate=0.5` — random HTTP 500s at given rate, used to trigger alerts
+- `GET /simulate/cpu?duration=2000` — CPU loop, makes `nodejs_eventloop_lag_p99_seconds` spike
+
+Key PromQL (derived ratio metric):
+
+```promql
+rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m]))
+rate(http_requests_total{status_code=~"5.."}[5m]) / rate(http_requests_total[5m]) * 100
+```
+
+**Learn:** The most useful production metrics are ratios. PromQL computes the ratio at query time from two raw Counters — no pre-computation in application code needed.
+
+**Verify:**
+
+```bash
+# Create a user and fetch it twice — first call misses cache, second hits
+USER_ID=$(curl -s -X POST http://localhost:3000/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Alice","email":"alice@test.com","role":"user"}' | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+curl http://localhost:3000/users/$USER_ID   # miss
+curl http://localhost:3000/users/$USER_ID   # hit
+
+# Confirm both counters exist
+curl -s http://localhost:3000/metrics | grep cache_
+
+# Simulate a slow request and watch P95 jump
+curl "http://localhost:3000/simulate/slow?ms=800"
+# Then check P95 in Prometheus — should be near 0.8s
+
+# Simulate errors
+curl "http://localhost:3000/simulate/error?rate=1.0"  # always 500
+```
+
+In Prometheus UI: `cache_hits_total` and `cache_misses_total` both have values. Cache hit rate query returns a number between 0 and 1. After hitting `/simulate/slow?ms=800`, P95 visibly increases in the Grafana Time Series panel.
+
+---
+
+### Phase 5 — PromQL mastery + recording rules
+
+```promql
+sum by(route) (rate(http_requests_total[5m]))
+topk(3, sum by(route) (rate(http_requests_total[5m])))
+sum(rate(http_request_duration_seconds_bucket{le="0.1"}[5m]))
+  / sum(rate(http_request_duration_seconds_count[5m]))
+```
+
+Create `prometheus/rules/recording_rules.yml` — pre-compute expensive `histogram_quantile` calls so dashboards load instantly.
+
+**Learn:** `sum by()`, `without()`, `topk()`, Apdex score, recording rules.
+
+**Verify:**
+
+```bash
+# Reload Prometheus config after adding recording rules
+curl -X POST http://localhost:9090/-/reload
+
+# Check rules were loaded without errors
+curl -s http://localhost:9090/api/v1/rules | python3 -m json.tool | grep '"name"'
+```
+
+In Prometheus UI → **Status → Rules** — recording rules must show **State: ok** (not error). Query the pre-computed metric name directly (e.g. `job:http_requests_total:rate5m`) — it must return data immediately without computing the full `sum by()` at query time.
+
+---
+
+### Phase 6 — Grafana dashboard from scratch
+
+Build entirely in the Grafana UI (no JSON files). One dashboard with:
+
+- **Time Series** — request rate + error rate overlaid
+- **Gauge visualization** — P95 latency with color thresholds (green/yellow/red)
+- **Stat** — `http_requests_in_flight` with sparkline
+- **Heatmap** — latency distribution (shows the shape, not just percentiles)
+- **Dashboard variable** `$route` — filters all panels at once via `label_values()`
+
+**Learn:** Panel types, time range controls, `$__rate_interval`, dashboard variables, color thresholds.
+
+**Verify:**
+
+- All 5 panel types render without "No data" or query errors (check the panel inspector)
+- Change the time range to "Last 15 minutes" — all panels update
+- Select a route from the `$route` dropdown — all panels filter to that route only
+- The Gauge visualization changes color based on the P95 value (green when fast, red when slow — trigger `/simulate/slow` to confirm the red threshold works)
+- The Heatmap shows a visible band of activity, not an empty grid
+
+---
+
+### Phase 7 — Alerting: write rules, trigger them, watch them fire
+
+Create `prometheus/rules/alert_rules.yml`:
+
+```yaml
+- alert: HighErrorRate
+  expr: rate(http_requests_total{status_code=~"5.."}[1m]) / rate(http_requests_total[1m]) > 0.05
+  for: 1m
+  labels:
+    severity: critical
+
+- alert: HighP95Latency
+  expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 0.5
+  for: 2m
+  labels:
+    severity: warning
+```
+
+Trigger intentionally:
+
+```bash
+while true; do curl -s "http://localhost:3000/simulate/error?rate=0.8" > /dev/null; sleep 0.1; done
+```
+
+Watch `http://localhost:9090/alerts` cycle: **INACTIVE → PENDING → FIRING**
+
+**Learn:** Alert rule anatomy (`expr`, `for`, `labels`, `annotations`). The `for` clause prevents flapping — the condition must be true for a full continuous window before firing. Without it, a single slow GC pause pages your on-call.
+
+**Verify:**
+
+```bash
+# Reload rules after creating the file
+curl -X POST http://localhost:9090/-/reload
+
+# Check rules loaded cleanly
+curl -s http://localhost:9090/api/v1/rules | python3 -m json.tool | grep -E '"name"|"state"'
+```
+
+In Prometheus UI → **Alerts**:
+
+1. Before triggering: both alerts show **INACTIVE** (grey)
+2. Start the error loop → within ~15s the alert shows **PENDING** (yellow) — condition is true but `for: 1m` not yet elapsed
+3. After ~1 minute of sustained errors → alert turns **FIRING** (red)
+4. Stop the loop → alert returns to INACTIVE within a few scrape cycles
+
+Both state transitions (INACTIVE → PENDING and PENDING → FIRING) must be observed to consider this phase complete.
+
+---
+
+## Instruction for new agent session
+
+> I am learning Prometheus and Grafana by building observability into a Node.js/Express app from scratch. The full plan is in `MonitoringLearning.md` at the root of this workspace.
+>
+> The app is a clean Express + TypeScript users CRUD API. `prom-client` is not installed yet. No Prometheus or Grafana config exists.
+>
+> Please read `MonitoringLearning.md` first, then help me execute the plan phase by phase, starting from Task 0. Teach me as we go — explain the "why" before writing code, and walk me through PromQL queries after each phase.

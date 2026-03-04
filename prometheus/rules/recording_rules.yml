@@ -1,0 +1,19 @@
+groups:
+  - name: http_request_rates
+    interval: 15s
+    rules:
+      # Per-route request rate — powers topk() and sum by(route) panels
+      - record: job:http_requests_total:rate5m
+        expr: sum by(job, route, method) (rate(http_requests_total[5m]))
+
+      # Per-route 5xx error rate — used in error ratio panels and alerts
+      - record: job:http_request_errors:rate5m
+        expr: sum by(job, route) (rate(http_requests_total{status_code=~"5.."}[5m]))
+
+      # P95 latency — expensive histogram_quantile pre-computed once per scrape
+      - record: job:http_request_duration_p95:5m
+        expr: >
+          histogram_quantile(
+            0.95,
+            sum by(job, le) (rate(http_request_duration_seconds_bucket[5m]))
+          )

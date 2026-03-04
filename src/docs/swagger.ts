@@ -14,7 +14,10 @@ export const swaggerSpec: OpenAPIV3.Document = {
   servers: [
     { url: 'http://localhost:3000', description: 'Local development' },
   ],
-  tags: [{ name: 'Users', description: 'User management endpoints' }],
+  tags: [
+    { name: 'Users', description: 'User management endpoints' },
+    { name: 'Simulate', description: 'Traffic simulation endpoints for testing observability' },
+  ],
   paths: {
     '/users': {
       get: {
@@ -51,7 +54,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
                 example: {
                   data: [
                     {
-                      id: '11111111-0000-0000-0000-000000000001',
+                      id: '1',
                       name: 'Alice Nguyen',
                       email: 'alice@example.com',
                       role: 'admin',
@@ -99,14 +102,110 @@ export const swaggerSpec: OpenAPIV3.Document = {
         },
       },
     },
+    '/simulate/slow': {
+      get: {
+        tags: ['Simulate'],
+        summary: 'Simulate a slow request',
+        description: 'Delays the response by `ms` milliseconds. Use this to spike P95/P99 latency in Grafana.',
+        operationId: 'simulateSlow',
+        parameters: [
+          {
+            name: 'ms',
+            in: 'query',
+            description: 'Delay in milliseconds (max 10000)',
+            schema: { type: 'integer', default: 500, minimum: 0, maximum: 10000 },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Response after the delay',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: { delayed_ms: { type: 'integer', example: 500 } },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/simulate/error': {
+      get: {
+        tags: ['Simulate'],
+        summary: 'Simulate random errors',
+        description: 'Returns HTTP 500 at the given `rate` (0.0–1.0). Use `rate=1.0` to always error, `rate=0` to never error.',
+        operationId: 'simulateError',
+        parameters: [
+          {
+            name: 'rate',
+            in: 'query',
+            description: 'Probability of returning a 500 (0.0 to 1.0)',
+            schema: { type: 'number', default: 0.5, minimum: 0, maximum: 1 },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Request succeeded',
+            content: {
+              'application/json': {
+                schema: { type: 'object', properties: { ok: { type: 'boolean', example: true } } },
+              },
+            },
+          },
+          '500': {
+            description: 'Simulated server error',
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/ErrorResponse' },
+                example: { error: { code: 'SIMULATED_ERROR', message: 'Simulated server error' } },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/simulate/cpu': {
+      get: {
+        tags: ['Simulate'],
+        summary: 'Simulate CPU spike',
+        description: 'Runs a busy loop for `duration` ms, blocking the event loop. Watch `nodejs_eventloop_lag_p99_seconds` spike in Prometheus.',
+        operationId: 'simulateCpu',
+        parameters: [
+          {
+            name: 'duration',
+            in: 'query',
+            description: 'CPU loop duration in milliseconds (max 10000)',
+            schema: { type: 'integer', default: 1000, minimum: 0, maximum: 10000 },
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'CPU loop completed',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    iterations: { type: 'integer', example: 48291823 },
+                    duration_ms: { type: 'integer', example: 1000 },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
     '/users/{id}': {
       parameters: [
         {
           name: 'id',
           in: 'path',
           required: true,
-          description: 'User ID (UUID)',
-          schema: { type: 'string', format: 'uuid' },
+          description: 'User ID',
+          schema: { type: 'string', example: '1' },
         },
       ],
       get: {
@@ -183,7 +282,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
         type: 'object',
         required: ['id', 'name', 'email', 'role', 'createdAt', 'updatedAt'],
         properties: {
-          id: { type: 'string', format: 'uuid', example: '11111111-0000-0000-0000-000000000001' },
+          id: { type: 'string', example: '1' },
           name: { type: 'string', example: 'Alice Nguyen' },
           email: { type: 'string', format: 'email', example: 'alice@example.com' },
           role: { $ref: '#/components/schemas/UserRole' },
