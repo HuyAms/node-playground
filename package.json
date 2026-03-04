@@ -1,5 +1,5 @@
 {
-  "name": "node-playground",
+  "name": "user-management",
   "private": true,
   "description": "Monorepo: user service, user-info service, observability stack",
   "scripts": {

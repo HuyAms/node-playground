@@ -26,7 +26,7 @@ function buildStreams(): pino.StreamEntry[] {
         target: 'pino-loki',
         options: {
           host: config.lokiUrl,
-          labels: { job: 'node-playground' },
+          labels: { job: 'user-management' },
           batching: { interval: 1 },
           silenceErrors: false,
         },

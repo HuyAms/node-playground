@@ -162,9 +162,9 @@ The app sends logs directly to Loki via **pino-loki** when `LOKI_URL` is set (e.
 
 1. Open **Explore** (compass icon) → select data source **Loki**.
 2. Use **LogQL** to query. Examples:
-   - All app logs: `{job="node-playground"}`.
-   - Filter by text: `{job="node-playground"} |= "requestId"` or `|= "error"`.
-   - By level: `{job="node-playground"} | json | level="error"` (if the log line is JSON).
+   - All app logs: `{job="user-management"}`.
+   - Filter by text: `{job="user-management"} |= "requestId"` or `|= "error"`.
+   - By level: `{job="user-management"} | json | level="error"` (if the log line is JSON).
    - Any labels: try `{}` and check which labels exist (e.g. `level`, `hostname`).
 3. Set time range and run query. You can correlate with metrics by time or by `requestId` in the log body.
 

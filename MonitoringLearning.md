@@ -171,7 +171,7 @@ curl -s http://localhost:9090/api/v1/targets | python3 -m json.tool | grep '"hea
 curl -s http://localhost:3001/api/health
 ```
 
-Open `http://localhost:9090/targets` — the `node-playground` target must show **State: UP** (green). If it shows DOWN, Prometheus can't reach the app.
+Open `http://localhost:9090/targets` — the `user-management` target must show **State: UP** (green). If it shows DOWN, Prometheus can't reach the app.
 
 ---
 

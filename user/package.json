@@ -1,5 +1,5 @@
 {
-  "name": "node-playground",
+  "name": "user-management",
   "version": "1.0.0",
   "description": "Enterprise-grade Node.js REST API",
   "main": "dist/server.js",

@@ -395,8 +395,8 @@ http_requests_in_flight
 process_resident_memory_bytes / 1024 / 1024
 
 # Container memory usage as % of limit
-container_memory_usage_bytes{name="node-playground-app-1"} 
-  / container_spec_memory_limit_bytes{name="node-playground-app-1"} * 100
+container_memory_usage_bytes{name="user-management-app-1"} 
+  / container_spec_memory_limit_bytes{name="user-management-app-1"} * 100
 ```
 
 ---
@@ -663,7 +663,7 @@ rule_files:
   - /etc/prometheus/rules/*.yml
 
 scrape_configs:
-  - job_name: "node-playground"
+  - job_name: "user-management"
     static_configs:
       - targets: ["app:3000"]
     # Relabeling: keep only essential labels to control cardinality.
@@ -691,7 +691,7 @@ groups:
 
       # App is unreachable — highest priority
       - alert: AppDown
-        expr: up{job="node-playground"} == 0
+        expr: up{job="user-management"} == 0
         for: 1m
         labels:
           severity: critical
@@ -730,9 +730,9 @@ groups:
       # Container is using more than 90% of its memory limit
       - alert: ContainerMemoryNearLimit
         expr: |
-          container_memory_usage_bytes{name=~"node-playground.*"}
+          container_memory_usage_bytes{name=~"user-management.*"}
           /
-          container_spec_memory_limit_bytes{name=~"node-playground.*"}
+          container_spec_memory_limit_bytes{name=~"user-management.*"}
           > 0.9
         for: 5m
         labels:
@@ -837,7 +837,7 @@ Visualization: Time series, one line per route.
 **What it tells you:** CPU saturation. Node.js is single-threaded for JS execution — if CPU is consistently at 100% of one core, you are CPU-bound and requests will queue.
 
 ```promql
-rate(process_cpu_seconds_total{job="node-playground"}[5m])
+rate(process_cpu_seconds_total{job="user-management"}[5m])
 ```
 Visualization: Time series, 0–1 range (1 = 100% of one core).
 
@@ -848,7 +848,7 @@ Visualization: Time series, 0–1 range (1 = 100% of one core).
 **What it tells you:** Resident Set Size. A monotonically growing RSS that never drops is a memory leak. Compare to container memory limit.
 
 ```promql
-process_resident_memory_bytes{job="node-playground"} / 1024 / 1024
+process_resident_memory_bytes{job="user-management"} / 1024 / 1024
 ```
 Visualization: Time series, MiB unit.
 
@@ -859,7 +859,7 @@ Visualization: Time series, MiB unit.
 **What it tells you:** How long async callbacks wait behind synchronous work. Values above 100ms indicate CPU-blocking code (synchronous JSON parsing, crypto, RegEx). This is the most important Node.js-specific metric.
 
 ```promql
-nodejs_eventloop_lag_seconds{job="node-playground"} * 1000
+nodejs_eventloop_lag_seconds{job="user-management"} * 1000
 ```
 Visualization: Time series, milliseconds unit. Alert if sustained above 100ms.
 
@@ -870,9 +870,9 @@ Visualization: Time series, milliseconds unit. Alert if sustained above 100ms.
 **What it tells you:** How close the container is to OOM kill. Node.js does not release memory aggressively to the OS, so RSS can appear high even without a leak. The container limit is the hard ceiling.
 
 ```promql
-container_memory_usage_bytes{name=~"node-playground.*"}
+container_memory_usage_bytes{name=~"user-management.*"}
 /
-container_spec_memory_limit_bytes{name=~"node-playground.*"}
+container_spec_memory_limit_bytes{name=~"user-management.*"}
 * 100
 ```
 Visualization: Gauge, percentage. Set thresholds at 80% (warning) and 90% (critical).
@@ -884,9 +884,9 @@ Visualization: Gauge, percentage. Set thresholds at 80% (warning) and 90% (criti
 **What it tells you:** Whether the container's CPU limit is being enforced. Throttling means the container hit its CPU quota and was paused — invisible in process-level CPU metrics. Use this when you see high latency but normal process CPU.
 
 ```promql
-rate(container_cpu_throttled_seconds_total{name=~"node-playground.*"}[5m])
+rate(container_cpu_throttled_seconds_total{name=~"user-management.*"}[5m])
 /
-rate(container_cpu_usage_seconds_total{name=~"node-playground.*"}[5m])
+rate(container_cpu_usage_seconds_total{name=~"user-management.*"}[5m])
 ```
 Visualization: Time series, percentage of CPU time throttled.
 
@@ -1135,4 +1135,4 @@ Prometheus scraping from the same IP repeatedly will trigger rate limits. Either
 
 ---
 
-*Generated for node-playground · Express · pino · Docker Compose · prom-client*
+*Generated for user-management · Express · pino · Docker Compose · prom-client*
