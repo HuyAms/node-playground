@@ -1,18 +1,18 @@
 services:
   app:
     build:
-      context: .
+      context: ../user
       target: dev
     ports:
       - '3000:3000'
     env_file:
-      - .env
+      - ../.env
     environment:
       - LOKI_URL=http://loki:3100
       - USER_INFO_SERVICE_URL=http://user-info:3000
     volumes:
-      - ./src:/app/src
-      - ./logs:/app/logs
+      - ../user/src:/app/src
+      - ../user/logs:/app/logs
     depends_on:
       - loki
       - user-info
@@ -20,17 +20,17 @@ services:
 
   user-info:
     build:
-      context: ./services/user-info
+      context: ../user-info
       target: dev
     ports:
       - '3002:3000'
     env_file:
-      - .env
+      - ../.env
     environment:
       - LOKI_URL=http://loki:3100
     volumes:
-      - ./services/user-info/src:/app/src
-      - ./services/user-info/logs:/app/logs
+      - ../user-info/src:/app/src
+      - ../user-info/logs:/app/logs
     depends_on:
       - loki
     restart: unless-stopped
@@ -49,8 +49,8 @@ services:
     ports:
       - '9090:9090'
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - ../prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ../prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
@@ -62,7 +62,7 @@ services:
     image: grafana/k6:latest
     profiles: [load]
     volumes:
-      - ./scripts:/scripts
+      - ../scripts:/scripts
     environment:
       - K6_BASE_URL=http://app:3000
       - DURATION=${DURATION:-999h}
@@ -80,8 +80,8 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ../grafana/provisioning:/etc/grafana/provisioning:ro
+      - ../grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
     restart: unless-stopped
 

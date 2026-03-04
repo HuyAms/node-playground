@@ -10,9 +10,9 @@ import { requestId } from '../../src/shared/middleware/requestId.js';
 
 const app = createApp();
 
-// Seed IDs we can rely on across all tests
-const SEED_ID_1 = '11111111-0000-0000-0000-000000000001'; // Alice Nguyen / admin
-const SEED_ID_2 = '11111111-0000-0000-0000-000000000002'; // Bob Chen / editor
+// Seed IDs we can rely on across all tests (match repository seed)
+const SEED_ID_1 = '1'; // Alice Nguyen / admin
+const SEED_ID_2 = '2'; // Bob Chen / editor
 
 // ---------------------------------------------------------------------------
 // GET /users — list + pagination

@@ -366,9 +366,9 @@ export const swaggerSpec: OpenAPIV3.Document = {
           createdAt: { type: 'string', format: 'date-time' },
           updatedAt: { type: 'string', format: 'date-time' },
           profile: {
-            oneOf: [{ $ref: '#/components/schemas/UserProfile' }, { type: 'null' }],
+            oneOf: [{ $ref: '#/components/schemas/UserProfile' }, { type: 'null' as const }],
             description: 'Enriched profile from user-info service; null if service unavailable',
-          },
+          } as Record<string, unknown>,
         },
       },
       CreateUserInput: {

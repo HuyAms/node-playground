@@ -19,8 +19,8 @@ Learn Prometheus and Grafana by building real observability into this Node.js/Ex
 ## Project context
 
 **Stack:** Node.js + Express + TypeScript  
-**Current state:** Phase 1 ✅ complete. PromQL basics covered — Gauge, Counter+rate(), Histogram+histogram_quantile().  
-**Next:** Phase 2 — Counter + Gauge: HTTP traffic middleware.
+**Current state:** Phase 4 ✅ complete. Cache layer + simulate routes built — cache hit/miss/size metrics, ratio PromQL, `histogram_quantile()` with `sum by(le)` mastered.  
+**Next:** Phase 5 — PromQL mastery + recording rules.
 
 ```
 src/
@@ -65,6 +65,57 @@ Express App (:3000/metrics)  ──scrape every 5s──▶  Prometheus (:9090)
 | **Gauge**     | Yes        | Heap used, in-flight requests, queue depth | Raw value, no `rate()` needed           |
 | **Histogram** | N/A        | Request duration, DB query time            | `histogram_quantile()`                  |
 | **Summary**   | N/A        | Client-side quantiles                      | Avoid — can't aggregate across replicas |
+
+---
+
+## Histogram vs Summary
+
+Both measure distributions (latency, size). The difference is **who computes the percentiles**.
+
+Given 5 requests: `10ms, 20ms, 30ms, 80ms, 100ms`
+
+**Summary** — app computes percentiles internally, exports pre-baked numbers:
+
+```
+http_request_duration_seconds{quantile="0.5", route="/users"}  0.030
+http_request_duration_seconds{quantile="0.95",route="/users"}  0.100
+http_request_duration_seconds{quantile="0.99",route="/users"}  0.100
+http_request_duration_seconds_sum{route="/users"}              0.240
+http_request_duration_seconds_count{route="/users"}            5
+```
+
+**Histogram** — app exports raw bucket counts, Prometheus computes percentiles at query time:
+
+```
+http_request_duration_seconds_bucket{le="0.005",route="/users"}  0
+http_request_duration_seconds_bucket{le="0.01", route="/users"}  1
+http_request_duration_seconds_bucket{le="0.025",route="/users"}  2
+http_request_duration_seconds_bucket{le="0.05", route="/users"}  3
+http_request_duration_seconds_bucket{le="0.1",  route="/users"}  5
+http_request_duration_seconds_bucket{le="+Inf", route="/users"}  5
+http_request_duration_seconds_sum{route="/users"}                0.240
+http_request_duration_seconds_count{route="/users"}              5
+```
+
+**Why Histogram wins with multiple replicas:**
+
+```
+App1 (fast):  P95 = 30ms
+App2 (slow):  P95 = 580ms
+
+Summary:  avg(30, 580) = 216ms  ← mathematically wrong
+Histogram: bucket counts add up → histogram_quantile() gives correct fleet-wide P95
+```
+
+| | Summary | Histogram |
+| --- | --- | --- |
+| Who computes P95 | App (pre-baked) | Prometheus at query time |
+| Aggregatable across replicas | No | Yes |
+| Accuracy | Exact | Approximate (interpolated between buckets) |
+| Extra lines in /metrics | `quantile=` | `_bucket` with `le=` |
+| Use for HTTP latency | Avoid | Always |
+
+**When Summary is acceptable:** single replica + need exact quantiles + cardinality cost of Histogram matters.
 
 ---
 
@@ -150,7 +201,7 @@ Build first Grafana Stat panel: live heap usage.
 
 ---
 
-### Phase 2 — Counter + Gauge: HTTP traffic middleware
+### Phase 2 — Counter + Gauge: HTTP traffic middleware ✅ DONE
 
 **Why:** No default metric tracks requests per route/status or concurrent in-flight HTTP connections.
 
@@ -193,7 +244,7 @@ In Prometheus UI: `http_requests_total` must return at least 2 series with diffe
 
 ---
 
-### Phase 3 — Histogram: HTTP request latency
+### Phase 3 — Histogram: HTTP request latency ✅ DONE
 
 **Why:** The free GC histogram rarely fires during dev — you can't experiment with it. HTTP latency fires on every request.
 
@@ -224,7 +275,7 @@ You must see lines with `_bucket`, `_sum`, and `_count` suffixes. In Prometheus 
 
 ---
 
-### Phase 4 — Cache layer + /simulate routes
+### Phase 4 — Cache layer + /simulate routes ✅ DONE
 
 Add features that make all metrics interesting and controllable.
 
@@ -275,28 +326,151 @@ In Prometheus UI: `cache_hits_total` and `cache_misses_total` both have values. 
 
 ### Phase 5 — PromQL mastery + recording rules
 
+**PromQL exercises first** — run these in the Prometheus UI before touching recording rules:
+
 ```promql
+# Request rate broken down by route
 sum by(route) (rate(http_requests_total[5m]))
+
+# Top 3 busiest routes
 topk(3, sum by(route) (rate(http_requests_total[5m])))
+
+# Error ratio (5xx / all)
+sum(rate(http_requests_total{status_code=~"5.."}[5m]))
+  / sum(rate(http_requests_total[5m]))
+
+# Fraction of requests under 100ms (poor man's Apdex)
 sum(rate(http_request_duration_seconds_bucket{le="0.1"}[5m]))
   / sum(rate(http_request_duration_seconds_count[5m]))
 ```
 
-Create `prometheus/rules/recording_rules.yml` — pre-compute expensive `histogram_quantile` calls so dashboards load instantly.
+**Learn:** `sum by()`, `without()`, `topk()`, label matchers (`=~`, `!=`), Apdex score.
 
-**Learn:** `sum by()`, `without()`, `topk()`, Apdex score, recording rules.
+---
+
+#### Recording rules
+
+**What they are:** Prometheus evaluates a PromQL expression on every scrape interval and saves the result as a brand-new metric. Grafana then queries that pre-computed metric instead of running the expensive expression on every dashboard load.
+
+**When to use them:**
+- Any `histogram_quantile()` call — computing percentiles fans out over every bucket label; pre-computing once and storing is dramatically cheaper at query time
+- Any multi-label `sum by()` expression that appears in more than one dashboard panel or alert rule — don't repeat the computation, record it once
+- Expressions that are slow in the Prometheus UI (>1s response) and are queried frequently
+- Alert rule expressions that are complex — recording them first makes the alert rule simpler and easier to test independently
+
+**When NOT to use them:**
+- Simple counter or gauge reads (`http_requests_total`, `process_cpu_seconds_total`) — they're already cheap, recording them just creates noise
+- One-off exploratory queries you run in the Prometheus UI — recording rules are for production, not investigation
+- Metrics you only look at once a day — the overhead of computing and storing them every 15s is wasteful
+- When the time window varies per query (e.g. sometimes `[5m]`, sometimes `[1h]`) — you'd need a separate rule per window, which defeats the purpose; just query raw
+- Early in a project — add recording rules only when you can measure the problem (slow dashboard, high Prometheus CPU). Don't pre-optimise.
+
+**Naming convention — always follow `level:metric:operation`:**
+
+| Segment | Meaning | Example |
+|---|---|---|
+| `job` | aggregation level | `job` (aggregated across instances) |
+| `http_requests_total` | base metric | the source metric name |
+| `rate5m` | operation + window | `rate` over `5m` |
+
+Full example: `job:http_requests_total:rate5m`
+
+---
+
+#### Step 1 — Wire the rules directory into prometheus.yml
+
+Add to your `prometheus/prometheus.yml` (alongside the existing `scrape_configs`):
+
+```yaml
+rule_files:
+  - "rules/*.yml"
+```
+
+---
+
+#### Step 2 — Create `prometheus/rules/recording_rules.yml`
+
+```yaml
+groups:
+  - name: http_request_rates
+    interval: 15s   # evaluate every 15s; must be >= scrape_interval
+    rules:
+      # Pre-compute per-route request rate
+      - record: job:http_requests_total:rate5m
+        expr: sum by(job, route, method) (rate(http_requests_total[5m]))
+
+      # Pre-compute per-route 5xx error rate
+      - record: job:http_request_errors:rate5m
+        expr: sum by(job, route) (rate(http_requests_total{status_code=~"5.."}[5m]))
+
+      # Pre-compute P95 latency (the expensive histogram_quantile)
+      - record: job:http_request_duration_p95:5m
+        expr: >
+          histogram_quantile(
+            0.95,
+            sum by(job, le) (rate(http_request_duration_seconds_bucket[5m]))
+          )
+```
+
+---
+
+#### Step 3 — Reload and verify
+
+```bash
+# Reload Prometheus so it picks up the new rule file
+curl -X POST http://localhost:9090/-/reload
+
+# Confirm rules loaded — should print three "name" entries
+curl -s http://localhost:9090/api/v1/rules | python3 -m json.tool | grep '"name"'
+
+# Query the pre-computed metrics directly (should return data immediately)
+curl -s 'http://localhost:9090/api/v1/query?query=job:http_requests_total:rate5m' \
+  | python3 -m json.tool | grep '"value"'
+
+curl -s 'http://localhost:9090/api/v1/query?query=job:http_request_duration_p95:5m' \
+  | python3 -m json.tool | grep '"value"'
+```
+
+---
+
+#### Step 4 — Compare raw vs pre-computed in Prometheus UI
+
+Open `http://localhost:9090` and run both queries side-by-side to feel the difference:
+
+```promql
+# Raw — Prometheus computes this on the fly every time
+histogram_quantile(0.95, sum by(le) (rate(http_request_duration_seconds_bucket[5m])))
+
+# Pre-computed — instant lookup, no fan-out
+job:http_request_duration_p95:5m
+```
+
+Both must return the same value. The pre-computed one appears in autocomplete as a first-class metric.
+
+---
+
+#### Step 5 — Add a Grafana panel using the recording rule
+
+In the Grafana dashboard from Phase 6 (or create a test panel now):
+
+1. Add a new **Time Series** panel
+2. Set the query to `job:http_request_duration_p95:5m`
+3. Add a second query (series B) with the raw `histogram_quantile(...)` expression
+4. Overlay both — they must be identical lines
+5. Delete series B and save — the panel now uses the recording rule
+
+This is how production dashboards are built: instrument → record → visualize.
+
+---
 
 **Verify:**
 
-```bash
-# Reload Prometheus config after adding recording rules
-curl -X POST http://localhost:9090/-/reload
+In Prometheus UI → **Status → Rules** — all three rules must show **State: ok** (not error).
 
-# Check rules were loaded without errors
-curl -s http://localhost:9090/api/v1/rules | python3 -m json.tool | grep '"name"'
-```
-
-In Prometheus UI → **Status → Rules** — recording rules must show **State: ok** (not error). Query the pre-computed metric name directly (e.g. `job:http_requests_total:rate5m`) — it must return data immediately without computing the full `sum by()` at query time.
+- `job:http_requests_total:rate5m` returns data
+- `job:http_request_errors:rate5m` returns data (may be 0 if no errors yet — trigger with `/simulate/error?rate=1.0`)
+- `job:http_request_duration_p95:5m` matches raw `histogram_quantile()` output
+- Grafana panel using `job:http_request_duration_p95:5m` renders without "No data"
 
 ---
 

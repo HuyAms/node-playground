@@ -137,7 +137,7 @@ Structured fields (`userId`, `email`, `requestId`) — never string interpolatio
 
 ### Redaction
 
-`authorization`, `cookie`, `password`, and `token` are stripped globally in `src/shared/logger.ts` via Pino's `redact` option. This applies to every log statement in the process — there is no per-call discipline required. If a new sensitive field is added to the data model, it is registered once in the `redact.paths` array.
+`authorization`, `cookie`, `password`, and `token` are stripped globally in `user/src/shared/logger.ts` via Pino's `redact` option. This applies to every log statement in the process — there is no per-call discipline required. If a new sensitive field is added to the data model, it is registered once in the `redact.paths` array.
 
 ### Transport Configuration
 
