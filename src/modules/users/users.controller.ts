@@ -36,6 +36,17 @@ export class UsersController {
     }
   };
 
+  getUserInfo = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const requestId = req.headers['x-request-id'] as string | undefined;
+      const { user, profile } = await this.service.getUserWithProfile(id, requestId);
+      res.status(200).json({ data: { ...user, profile } });
+    } catch (err) {
+      next(err);
+    }
+  };
+
   createUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const input = req.body as CreateUserInput;

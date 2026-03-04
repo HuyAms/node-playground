@@ -11,6 +11,11 @@ scrape_configs:
       - targets:
           - app:3000
 
+  - job_name: user-info
+    static_configs:
+      - targets:
+          - user-info:3000
+
   - job_name: prometheus
     static_configs:
       - targets:

@@ -24,12 +24,6 @@ export const config = {
   logLevel: requireEnv('LOG_LEVEL', 'info'),
   logFile: env === 'development' ? 'logs/app.log' : undefined,
   lokiUrl: process.env.LOKI_URL ?? undefined,
-  rateLimit: {
-    windowMs: parseIntEnv('RATE_LIMIT_WINDOW_MS', 60_000),
-    max: parseIntEnv('RATE_LIMIT_MAX', 100),
-  },
-  corsOrigin: requireEnv('CORS_ORIGIN', '*'),
-  userInfoServiceUrl: process.env.USER_INFO_SERVICE_URL ?? 'http://localhost:3002',
 } as const;
 
 export type Config = typeof config;
