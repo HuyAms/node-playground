@@ -5,6 +5,7 @@ import { PaginationQuery, PaginatedResult, buildPaginationMeta } from '../../sha
 import { NotFoundError, ConflictError } from '../../shared/errors/index.js';
 import { logger } from '../../shared/logger.js';
 import { cacheHitsTotal, cacheMissesTotal, cacheSize } from '../../shared/metrics.js';
+import { getUserProfile, UserProfilePayload } from '../../shared/userInfoClient.js';
 
 const CACHE_NAME = 'users';
 const CACHE_TTL_MS = 30_000;
@@ -53,6 +54,20 @@ export class UsersService {
     cacheSize.set({ cache: CACHE_NAME }, this.cache.size);
     logger.debug({ requestId, userId: id }, 'User retrieved and cached');
     return user;
+  }
+
+  async getUserWithProfile(
+    id: string,
+    requestId?: string,
+  ): Promise<{ user: User; profile: UserProfilePayload | null }> {
+    const user = await this.getUserById(id, requestId);
+    let profile: UserProfilePayload | null = null;
+    try {
+      profile = await getUserProfile(id, requestId);
+    } catch (err) {
+      logger.warn({ requestId, userId: id, err }, 'user-info service unavailable, returning user without profile');
+    }
+    return { user, profile };
   }
 
   async createUser(input: CreateUserInput, requestId?: string): Promise<User> {

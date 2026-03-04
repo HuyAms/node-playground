@@ -1,6 +1,6 @@
 import pino from 'pino';
 import pinoHttp from 'pino-http';
-import { config } from '../config.js';
+import { config } from './config.js';
 
 function buildStreams(): pino.StreamEntry[] {
   const level = config.logLevel as pino.Level;
@@ -26,7 +26,7 @@ function buildStreams(): pino.StreamEntry[] {
         target: 'pino-loki',
         options: {
           host: config.lokiUrl,
-          labels: { job: 'node-playground' },
+          labels: { job: 'user-info' },
           batching: { interval: 1 },
           silenceErrors: false,
         },
@@ -54,21 +54,16 @@ export const logger = pino(
 
 export const httpLogger = pinoHttp({
   logger,
-  // Reuse the request-id assigned by our requestId middleware
   genReqId: (req) => (req.headers['x-request-id'] as string) ?? crypto.randomUUID(),
   customProps: (req) => ({
     requestId: req.headers['x-request-id'],
   }),
   autoLogging: {
-    ignore: (req) => req.url === '/health' || (req.url?.startsWith('/metrics') ?? false) || (req.url?.startsWith('/docs') ?? false),
+    ignore: (req) => req.url === '/health' || (req.url?.startsWith('/metrics') ?? false),
   },
   serializers: {
     req(req) {
-      return {
-        method: req.method,
-        url: req.url,
-        // Don't log full headers; they may contain auth material
-      };
+      return { method: req.method, url: req.url };
     },
     res(res) {
       return { statusCode: res.statusCode };

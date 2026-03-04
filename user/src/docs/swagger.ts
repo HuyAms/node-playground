@@ -198,6 +198,54 @@ export const swaggerSpec: OpenAPIV3.Document = {
         },
       },
     },
+    '/users/{id}/info': {
+      parameters: [
+        {
+          name: 'id',
+          in: 'path',
+          required: true,
+          description: 'User ID',
+          schema: { type: 'string', example: '1' },
+        },
+      ],
+      get: {
+        tags: ['Users'],
+        summary: 'Get user with profile',
+        description:
+          'Returns the user enriched with profile data (displayName, preferences) from the user-info service. If the user-info service is unavailable, returns the user with `profile: null`.',
+        operationId: 'getUserInfo',
+        responses: {
+          '200': {
+            description: 'User with optional profile',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: { data: { $ref: '#/components/schemas/UserWithProfile' } },
+                },
+                example: {
+                  data: {
+                    id: '1',
+                    name: 'Alice Nguyen',
+                    email: 'alice@example.com',
+                    role: 'admin',
+                    createdAt: '2024-01-10T08:00:00.000Z',
+                    updatedAt: '2024-01-10T08:00:00.000Z',
+                    profile: {
+                      userId: '1',
+                      displayName: 'Alice N.',
+                      preferences: { theme: 'dark', locale: 'en-US' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          '404': { $ref: '#/components/responses/NotFoundError' },
+          '500': { $ref: '#/components/responses/InternalError' },
+        },
+      },
+    },
     '/users/{id}': {
       parameters: [
         {
@@ -288,6 +336,39 @@ export const swaggerSpec: OpenAPIV3.Document = {
           role: { $ref: '#/components/schemas/UserRole' },
           createdAt: { type: 'string', format: 'date-time' },
           updatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+      UserProfile: {
+        type: 'object',
+        description: 'Profile from the user-info service (display name, preferences)',
+        required: ['userId', 'displayName', 'preferences'],
+        properties: {
+          userId: { type: 'string', example: '1' },
+          displayName: { type: 'string', example: 'Alice N.' },
+          preferences: {
+            type: 'object',
+            properties: {
+              theme: { type: 'string', enum: ['light', 'dark', 'system'], example: 'dark' },
+              locale: { type: 'string', example: 'en-US' },
+            },
+          },
+        },
+      },
+      UserWithProfile: {
+        type: 'object',
+        description: 'User with optional profile from user-info service',
+        required: ['id', 'name', 'email', 'role', 'createdAt', 'updatedAt'],
+        properties: {
+          id: { type: 'string', example: '1' },
+          name: { type: 'string', example: 'Alice Nguyen' },
+          email: { type: 'string', format: 'email', example: 'alice@example.com' },
+          role: { $ref: '#/components/schemas/UserRole' },
+          createdAt: { type: 'string', format: 'date-time' },
+          updatedAt: { type: 'string', format: 'date-time' },
+          profile: {
+            oneOf: [{ $ref: '#/components/schemas/UserProfile' }, { type: 'null' as const }],
+            description: 'Enriched profile from user-info service; null if service unavailable',
+          } as Record<string, unknown>,
         },
       },
       CreateUserInput: {

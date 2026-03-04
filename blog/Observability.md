@@ -8,6 +8,8 @@
 
 1. [Architecture Overview](#1-architecture-overview)
 2. [Metrics Design](#2-metrics-design)
+   - [2.1 What to Instrument](#21-what-to-instrument)
+   - [2.5 Metric Naming Conventions](#25-metric-naming-conventions)
 3. [Prometheus Concepts — Teaching Section](#3-prometheus-concepts--teaching-section)
 4. [Implementation](#4-implementation)
 5. [Grafana Dashboard](#5-grafana-dashboard)
@@ -149,6 +151,45 @@ networks:
 
 ## 2. Metrics Design
 
+### 2.1 What to Instrument
+
+Instrument what answers an operational question. Group by system type — different systems have different failure modes.
+
+#### Server-side — Online Systems
+
+An online system handles requests in real time and must respond quickly. The four essential metrics:
+
+| Metric | Type | Metric Name | Why it matters |
+|---|---|---|---|
+| Request rate | Counter | `http_requests_total` | Baseline for capacity and anomaly detection. A sudden drop means the app is down or traffic was lost. |
+| Latency | Histogram | `http_request_duration_seconds` | User-perceived performance. Report p50, p95, p99 — average hides tail latency. |
+| Error rate | Counter (derived) | `http_requests_total{status=~"5.."}` | Primary SLO signal. Rising errors = users are experiencing failures. |
+| In-progress requests | Gauge | `http_requests_in_flight` | Current concurrency. Unbounded growth indicates a slow upstream causing queuing. |
+
+**PromQL for each:**
+
+```promql
+# Request rate — requests per second over last 5 min
+sum(rate(http_requests_total[5m])) by (route)
+
+# Latency percentiles
+histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))
+histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))
+histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket[5m])))
+
+# Error rate as a ratio (alert when > 0.05)
+sum(rate(http_requests_total{status=~"5.."}[5m]))
+/
+sum(rate(http_requests_total[5m]))
+
+# In-progress requests right now
+sum(http_requests_in_flight)
+```
+
+These four map directly to the metrics instrumented in `src/shared/metrics.ts` and are the first panels on the Grafana dashboard (see Section 5).
+
+---
+
 ### Metric Selection Rationale
 
 Every metric must answer an operational question. If you cannot answer "what alert would I write for this?", do not instrument it.
@@ -203,6 +244,113 @@ Labels create time series. Every unique combination of label values = one time s
 
 You must extract this from `req.route.path` after the route handler runs (in a response hook), not from `req.path`.
 
+### 2.5 Metric Naming Conventions
+
+Metric names are permanent. Once a name is scraped and stored, renaming it breaks all dashboards and alerts. Get it right upfront.
+
+**Pattern:**
+```
+<namespace>_<subsystem>_<name>_<unit>[_suffix]
+```
+
+| Part | Description | Examples |
+|---|---|---|
+| `namespace` | Library or system origin | `http`, `process`, `db`, `rpc`, `nodejs` |
+| `subsystem` | Optional component within the system | `server`, `client`, `pool` |
+| `name` | What is being measured | `requests`, `duration`, `connections`, `errors` |
+| `unit` | Base SI unit — always base, never derived | `seconds`, `bytes` |
+| `suffix` | Type-specific — see per-type rules below | `_total`, `_bucket`, `_sum` |
+
+---
+
+**Counter — suffix `_total` is mandatory**
+
+A Counter suffix of `_total` is not optional decoration — it is the Prometheus convention that signals "this is a monotonically increasing value." Tools, exporters, and dashboards rely on it.
+
+- Never use `_count` (reserved for the auto-generated Histogram/Summary series)
+- Never use `_counter` as a suffix — it is redundant and non-standard
+
+```
+# Good
+http_requests_total
+db_errors_total
+process_cpu_seconds_total
+
+# Bad
+app_requests_count       ← _count is reserved
+http_request_counter     ← _counter is not a convention
+requests_total           ← missing namespace
+```
+
+---
+
+**Gauge — no mandatory suffix**
+
+The name itself should describe current state. Include a unit suffix when measuring a physical quantity.
+
+- Common descriptive suffixes: `_active`, `_in_flight`, `_current`
+- Physical quantity suffixes: `_bytes`, `_seconds`, `_ratio`
+
+```
+# Good
+http_requests_in_flight
+process_resident_memory_bytes
+db_connections_active
+nodejs_eventloop_lag_seconds
+
+# Bad
+http_requests_now        ← ambiguous, non-standard
+memory                   ← missing namespace and unit
+queue_size_kb            ← use _bytes, not derived units
+```
+
+---
+
+**Histogram — no suffix on the base name**
+
+Prometheus auto-generates three series from a Histogram registration:
+
+| Auto-generated series | Meaning |
+|---|---|
+| `<name>_bucket{le="..."}` | Cumulative count of observations ≤ le |
+| `<name>_sum` | Sum of all observed values |
+| `<name>_count` | Total number of observations |
+
+Always include the unit in the base name. Never add `_histogram` — it is redundant.
+
+```
+# Good
+http_request_duration_seconds    → produces _bucket, _sum, _count
+http_request_size_bytes
+
+# Bad
+http_request_duration            ← missing unit
+http_latency_seconds_histogram   ← _histogram suffix is redundant
+http_request_duration_ms         ← use seconds, not ms
+```
+
+---
+
+**Summary — same pattern as Histogram**
+
+Prometheus generates `_sum`, `_count`, and `{quantile="..."}` label series automatically. The base name follows the same rules as Histogram.
+
+Prefer Histogram over Summary in almost all cases: Summaries compute quantiles client-side and **cannot be aggregated across multiple instances** in PromQL. Histograms aggregate correctly with `sum by (le)` before `histogram_quantile()`.
+
+---
+
+**Unit rules**
+
+Always use base SI units in the name. Never encode derived units (milliseconds, kilobytes) — they create ambiguity and break tooling that expects base units.
+
+| Concept | Correct suffix | Never use |
+|---|---|---|
+| Time / duration | `_seconds` | `_ms`, `_milliseconds`, `_minutes` |
+| Data size | `_bytes` | `_kb`, `_megabytes`, `_mb` |
+| Cumulative counts | `_total` suffix | `_count`, `_num`, `_counter` |
+| Ratios (0–1) | `_ratio` | `_percent`, `_pct` |
+| Temperatures | `_celsius` | `_fahrenheit` |
+
 ---
 
 ## 3. Prometheus Concepts — Teaching Section
@@ -247,8 +395,8 @@ http_requests_in_flight
 process_resident_memory_bytes / 1024 / 1024
 
 # Container memory usage as % of limit
-container_memory_usage_bytes{name="node-playground-app-1"} 
-  / container_spec_memory_limit_bytes{name="node-playground-app-1"} * 100
+container_memory_usage_bytes{name="user-management-app-1"} 
+  / container_spec_memory_limit_bytes{name="user-management-app-1"} * 100
 ```
 
 ---
@@ -515,7 +663,7 @@ rule_files:
   - /etc/prometheus/rules/*.yml
 
 scrape_configs:
-  - job_name: "node-playground"
+  - job_name: "user-management"
     static_configs:
       - targets: ["app:3000"]
     # Relabeling: keep only essential labels to control cardinality.
@@ -543,7 +691,7 @@ groups:
 
       # App is unreachable — highest priority
       - alert: AppDown
-        expr: up{job="node-playground"} == 0
+        expr: up{job="user-management"} == 0
         for: 1m
         labels:
           severity: critical
@@ -582,9 +730,9 @@ groups:
       # Container is using more than 90% of its memory limit
       - alert: ContainerMemoryNearLimit
         expr: |
-          container_memory_usage_bytes{name=~"node-playground.*"}
+          container_memory_usage_bytes{name=~"user-management.*"}
           /
-          container_spec_memory_limit_bytes{name=~"node-playground.*"}
+          container_spec_memory_limit_bytes{name=~"user-management.*"}
           > 0.9
         for: 5m
         labels:
@@ -689,7 +837,7 @@ Visualization: Time series, one line per route.
 **What it tells you:** CPU saturation. Node.js is single-threaded for JS execution — if CPU is consistently at 100% of one core, you are CPU-bound and requests will queue.
 
 ```promql
-rate(process_cpu_seconds_total{job="node-playground"}[5m])
+rate(process_cpu_seconds_total{job="user-management"}[5m])
 ```
 Visualization: Time series, 0–1 range (1 = 100% of one core).
 
@@ -700,7 +848,7 @@ Visualization: Time series, 0–1 range (1 = 100% of one core).
 **What it tells you:** Resident Set Size. A monotonically growing RSS that never drops is a memory leak. Compare to container memory limit.
 
 ```promql
-process_resident_memory_bytes{job="node-playground"} / 1024 / 1024
+process_resident_memory_bytes{job="user-management"} / 1024 / 1024
 ```
 Visualization: Time series, MiB unit.
 
@@ -711,7 +859,7 @@ Visualization: Time series, MiB unit.
 **What it tells you:** How long async callbacks wait behind synchronous work. Values above 100ms indicate CPU-blocking code (synchronous JSON parsing, crypto, RegEx). This is the most important Node.js-specific metric.
 
 ```promql
-nodejs_eventloop_lag_seconds{job="node-playground"} * 1000
+nodejs_eventloop_lag_seconds{job="user-management"} * 1000
 ```
 Visualization: Time series, milliseconds unit. Alert if sustained above 100ms.
 
@@ -722,9 +870,9 @@ Visualization: Time series, milliseconds unit. Alert if sustained above 100ms.
 **What it tells you:** How close the container is to OOM kill. Node.js does not release memory aggressively to the OS, so RSS can appear high even without a leak. The container limit is the hard ceiling.
 
 ```promql
-container_memory_usage_bytes{name=~"node-playground.*"}
+container_memory_usage_bytes{name=~"user-management.*"}
 /
-container_spec_memory_limit_bytes{name=~"node-playground.*"}
+container_spec_memory_limit_bytes{name=~"user-management.*"}
 * 100
 ```
 Visualization: Gauge, percentage. Set thresholds at 80% (warning) and 90% (critical).
@@ -736,9 +884,9 @@ Visualization: Gauge, percentage. Set thresholds at 80% (warning) and 90% (criti
 **What it tells you:** Whether the container's CPU limit is being enforced. Throttling means the container hit its CPU quota and was paused — invisible in process-level CPU metrics. Use this when you see high latency but normal process CPU.
 
 ```promql
-rate(container_cpu_throttled_seconds_total{name=~"node-playground.*"}[5m])
+rate(container_cpu_throttled_seconds_total{name=~"user-management.*"}[5m])
 /
-rate(container_cpu_usage_seconds_total{name=~"node-playground.*"}[5m])
+rate(container_cpu_usage_seconds_total{name=~"user-management.*"}[5m])
 ```
 Visualization: Time series, percentage of CPU time throttled.
 
@@ -825,14 +973,14 @@ remote_write:
 - Do not go below 10s for application metrics — you gain little resolution and significantly increase Prometheus load.
 - Use 60s for infrastructure metrics (cAdvisor, Node Exporter) where second-level resolution is unnecessary.
 
-### Label Naming Conventions
+### Naming Conventions
 
-Follow the [Prometheus naming guide](https://prometheus.io/docs/practices/naming/):
-- Metric names: `library_name_unit_suffix` → `http_request_duration_seconds`
-- Units in the name: `_seconds`, `_bytes`, `_total`
-- No units as labels
+For comprehensive metric naming rules per type (Counter, Gauge, Histogram), see [Section 2.5 — Metric Naming Conventions](#25-metric-naming-conventions).
+
+**Label conventions** (follow [Prometheus naming guide](https://prometheus.io/docs/practices/naming/)):
 - Labels: `snake_case`
-- Boolean labels: avoid — use two separate metrics or an enum label
+- No units as label values — units belong in the metric name
+- Boolean labels: avoid — use two separate metrics or an enum label (`state="active"` / `state="idle"`)
 
 ### Recording Rules for Dashboard Performance
 
@@ -987,4 +1135,4 @@ Prometheus scraping from the same IP repeatedly will trigger rate limits. Either
 
 ---
 
-*Generated for node-playground · Express · pino · Docker Compose · prom-client*
+*Generated for user-management · Express · pino · Docker Compose · prom-client*

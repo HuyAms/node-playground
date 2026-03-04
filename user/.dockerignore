@@ -5,7 +5,6 @@ logs
 .git
 .gitignore
 tests
-blog
 *.md
 .vscode
 coverage

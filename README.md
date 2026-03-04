@@ -11,26 +11,33 @@ A production-structured REST API built with Node.js, Express, and TypeScript. Fe
 
 ---
 
-## Quick Start
+## Quick Start (User service only)
 
 ```bash
-# 1. Install dependencies
+cd user
 npm install
-
-# 2. Copy environment config
 cp .env.example .env
-
-# 3. Start the development server (hot-reload via tsx)
 npm run dev
 ```
 
 The server starts on `http://localhost:3000` by default.
 
+## Full stack with Docker
+
+From the repo root:
+
+```bash
+npm run docker:up:build
+# or: docker compose -f docker/docker-compose.yml up --build
+```
+
+Runs the user service (app), user-info service, Loki, Prometheus, and Grafana. Ensure root `.env` exists (see `user/.env.example` and `user-info/.env.example`).
+
 ---
 
 ## Environment Variables
 
-Copy `.env.example` to `.env` and adjust as needed.
+In `user/`, copy `.env.example` to `.env` and adjust as needed.
 
 | Variable               | Default       | Description                          |
 | ---------------------- | ------------- | ------------------------------------ |
@@ -43,7 +50,7 @@ Copy `.env.example` to `.env` and adjust as needed.
 
 ---
 
-## Available Scripts
+## Available Scripts (from `user/`)
 
 | Script               | Description                                 |
 | -------------------- | ------------------------------------------- |
@@ -234,7 +241,7 @@ The in-memory store is pre-seeded with 10 users (roles: `admin`, `editor`, `view
 ## Running Tests
 
 ```bash
-npm test
+cd user && npm test
 ```
 
 The test suite covers:
@@ -267,34 +274,23 @@ http://localhost:3000/docs.json
 ## Project Structure
 
 ```
-src/
-  config.ts                   # Typed environment config
-  app.ts                      # Express app factory
-  server.ts                   # HTTP server + graceful shutdown
-  shared/
-    logger.ts                 # Pino instance (redacts sensitive fields)
-    errors/
-      AppError.ts             # Base operational error
-      NotFoundError.ts
-      ValidationError.ts
-      ConflictError.ts
-    middleware/
-      requestId.ts            # x-request-id reuse/generation
-      validate.ts             # Zod validation middleware factory
-      errorHandler.ts         # Centralized error serialization
-    types/
-      pagination.ts           # PaginatedResult<T>, buildPaginationMeta
-  modules/
-    users/
-      users.schema.ts         # Zod schemas + inferred types
-      users.repository.ts     # In-memory store + seed data
-      users.service.ts        # Business logic + logging
-      users.controller.ts     # Thin HTTP handlers
-      users.routes.ts         # Route registration + middleware wiring
-docs/
-  swagger.ts                  # Full OpenAPI 3.0.3 spec
-tests/
-  users/
-    users.test.ts             # 24 integration tests
+user/                         # User service (main API)
+  src/
+    config.ts, app.ts, server.ts
+    shared/                    # Logger, errors, middleware, types
+    modules/users/            # Users CRUD + simulate
+    docs/swagger.ts
+  tests/
+  package.json, Dockerfile, tsconfig.json, vitest.config.ts
+user-info/                    # User-info microservice
+  src/
+  package.json, Dockerfile
+blog/                         # Blog posts (markdown)
+docker/                       # Docker Compose for full stack
+  docker-compose.yml
+grafana/                      # Dashboards + provisioning
+prometheus/                   # Scrape config + rules
+docs/                         # Project docs
+scripts/                      # Load test (k6)
 ARCHITECTURE.md               # Engineering decision log
 ```
