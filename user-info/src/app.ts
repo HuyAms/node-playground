@@ -2,10 +2,10 @@ import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
 
-import { registry } from './metrics.js';
+import { httpMetrics } from '@node-playground/observability';
+import { registry, httpRequestsTotal, httpRequestsInFlight, httpRequestDuration } from './metrics.js';
 import { httpLogger } from './logger.js';
 import { requestId } from './middleware/requestId.js';
-import { httpMetrics } from './middleware/httpMetrics.js';
 import { getProfileById } from './data/seedProfiles.js';
 
 export function createApp(): express.Application {
@@ -17,7 +17,7 @@ export function createApp(): express.Application {
 
   app.use(requestId);
   app.use(httpLogger);
-  app.use(httpMetrics);
+  app.use(httpMetrics({ httpRequestsTotal, httpRequestsInFlight, httpRequestDuration }));
 
   app.get('/metrics', async (_req, res) => {
     res.set('Content-Type', registry.contentType);
