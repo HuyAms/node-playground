@@ -2,6 +2,7 @@
   "name": "user-management",
   "private": true,
   "description": "Monorepo: user service, user-info service, observability stack",
+  "workspaces": ["user", "user-info", "packages/observability"],
   "scripts": {
     "docker:up": "docker compose -f docker/docker-compose.yml up",
     "docker:up:build": "docker compose -f docker/docker-compose.yml up --build"
