@@ -39,7 +39,7 @@ export const config = {
   logFile: env === 'development' ? 'logs/app.log' : undefined,
   lokiUrl: process.env.LOKI_URL ?? undefined,
   enableFakeSlowness: parseBoolEnv('ENABLE_FAKE_SLOWNESS', true),
-  fakeErrorRate: parseFloatEnv('USER_INFO_FAKE_ERROR_RATE', 0.1),
+  fakeErrorRate: parseFloatEnv('USER_INFO_FAKE_ERROR_RATE', 0.4),
 } as const;
 
 export type Config = typeof config;
