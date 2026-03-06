@@ -7,8 +7,8 @@ import {logger} from '../logger.js';
  * serialized to HTTP responses. Key invariants:
  *
  * 1. AppError subclasses are "operational" — known failure modes.
- *    The throw site (service or validate middleware) owns the warn log with
- *    business context. This handler only serializes the HTTP response.
+ *    For 5xx we log at error here; for 4xx the throw site may log warn.
+ *    This handler serializes the HTTP response.
  *
  * 2. Everything else is an unexpected failure.
  *    Log at error level (with full stack) and respond 500.
@@ -26,6 +26,9 @@ export function errorHandler(
   const requestId = req.headers['x-request-id'] as string | undefined;
 
   if (err instanceof AppError) {
+    if (err.statusCode >= 500) {
+      logger.error({err, requestId, method: req.method, url: req.url}, err.message);
+    }
     res.status(err.statusCode).json(err.serialize(requestId));
     return;
   }

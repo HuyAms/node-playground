@@ -22,7 +22,7 @@ async function fakeSlownessAndErrorMiddleware(
     await delay(300 + Math.random() * 50);
   }
   if (Math.random() < config.fakeErrorRate) {
-    next(new AppError('user-info: DB connection failure', 500, 'FAKE_ERROR'));
+    next(new Error('user-info: DB connection failure'));
     return;
   }
   next();
