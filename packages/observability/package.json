@@ -9,6 +9,13 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.52.1",
+    "@opentelemetry/instrumentation-express": "^0.36.1",
+    "@opentelemetry/instrumentation-fetch": "^0.41.1",
+    "@opentelemetry/resources": "^1.26.0",
+    "@opentelemetry/sdk-node": "^0.52.1",
+    "@opentelemetry/semantic-conventions": "^1.26.0",
     "pino": "^9.3.1",
     "pino-http": "^10.2.0",
     "pino-loki": "^3.0.0",

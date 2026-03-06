@@ -11,12 +11,15 @@ services:
     environment:
       - LOKI_URL=http://loki:3100
       - USER_INFO_SERVICE_URL=http://user-info:3000
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=user
     volumes:
       - ./user/src:/app/user/src
       - ./user/logs:/app/user/logs
     depends_on:
       - loki
       - user-info
+      - otel-collector
     restart: unless-stopped
     healthcheck:
       test:
@@ -42,11 +45,34 @@ services:
       - ./.env
     environment:
       - LOKI_URL=http://loki:3100
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
+      - OTEL_SERVICE_NAME=user-info
     volumes:
       - ./user-info/src:/app/user-info/src
       - ./user-info/logs:/app/user-info/logs
     depends_on:
       - loki
+      - otel-collector
+    restart: unless-stopped
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    ports:
+      - '4317:4317'
+      - '4318:4318'
+    volumes:
+      - ./otel-collector/otel-collector-config.yml:/etc/otelcol/config.yml:ro
+    command: ['--config=/etc/otelcol/config.yml']
+    restart: unless-stopped
+
+  tempo:
+    image: grafana/tempo:2.3.1
+    ports:
+      - '3200:3200'
+    volumes:
+      - ./tempo/tempo-config.yml:/etc/tempo.yml:ro
+      - tempo_data:/var/tempo
+    command: ['-config.file=/etc/tempo.yml']
     restart: unless-stopped
 
   loki:
@@ -88,6 +114,7 @@ services:
       - '3001:3000'
     depends_on:
       - loki
+      - tempo
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
@@ -99,3 +126,4 @@ services:
 
 volumes:
   grafana_data:
+  tempo_data:

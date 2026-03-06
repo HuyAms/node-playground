@@ -1,3 +1,4 @@
+import './instrumentation.js';
 import fs from 'node:fs';
 import { createApp } from './app.js';
 import { config } from './config.js';
