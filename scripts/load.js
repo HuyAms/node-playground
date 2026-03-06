@@ -33,11 +33,11 @@ export const options = {
       executor: 'ramping-vus',
       exec: 'getUserById',
       stages: [
-        { duration: '2m',  target: 10 }, // ramp up
-        { duration: '6m',  target: 10 }, // steady
-        { duration: '2m',  target: 25 }, // spike — watch cache_hit_rate hold up
-        { duration: '2m',  target: 10 }, // recover
-        { duration: DURATION, target: 10 }, // hold until stopped
+        { duration: '2m', target: 25 }, // ramp up
+        { duration: '6m', target: 25 }, // steady baseline
+        { duration: '2m', target: 55 }, // spike
+        { duration: '2m', target: 25 }, // recover
+        { duration: DURATION, target: 25 },
       ],
     },
 
@@ -46,11 +46,11 @@ export const options = {
       executor: 'ramping-vus',
       exec: 'listUsers',
       stages: [
-        { duration: '2m',  target: 5 },
-        { duration: '6m',  target: 5 },
-        { duration: '2m',  target: 12 }, // spike
-        { duration: '2m',  target: 5 },
-        { duration: DURATION, target: 5 },
+        { duration: '2m', target: 12 },
+        { duration: '6m', target: 12 },
+        { duration: '2m', target: 28 }, // spike
+        { duration: '2m', target: 12 },
+        { duration: DURATION, target: 12 },
       ],
     },
 
@@ -59,11 +59,11 @@ export const options = {
       executor: 'ramping-vus',
       exec: 'getUserWithProfile',
       stages: [
-        { duration: '2m',  target: 14 }, // ramp up
-        { duration: '6m',  target: 14 }, // steady
-        { duration: '2m',  target: 32 }, // spike
-        { duration: '2m',  target: 14 }, // recover
-        { duration: DURATION, target: 14 }, // hold until stopped
+        { duration: '2m', target: 20 },
+        { duration: '6m', target: 20 },
+        { duration: '2m', target: 45 }, // spike
+        { duration: '2m', target: 20 },
+        { duration: DURATION, target: 20 },
       ],
     },
 
@@ -72,8 +72,23 @@ export const options = {
       executor: 'ramping-vus',
       exec: 'createUser',
       stages: [
-        { duration: '2m',  target: 1 },
-        { duration: '10m', target: 1 },
+        { duration: '2m', target: 2 },
+        { duration: '6m', target: 2 },
+        { duration: '2m', target: 4 }, // spike
+        { duration: '2m', target: 2 },
+        { duration: DURATION, target: 2 },
+      ],
+    },
+
+    // Low volume updates — PATCH /users/:id (real-world mid-popular mix)
+    update_user: {
+      executor: 'ramping-vus',
+      exec: 'updateUser',
+      stages: [
+        { duration: '2m', target: 1 },
+        { duration: '6m', target: 1 },
+        { duration: '2m', target: 3 }, // spike
+        { duration: '2m', target: 1 },
         { duration: DURATION, target: 1 },
       ],
     },
@@ -82,18 +97,19 @@ export const options = {
     health_probe: {
       executor: 'constant-vus',
       exec: 'healthCheck',
-      vus: 2,
+      vus: 3,
       duration: DURATION,
     },
 
-    // 404s — GET /users/:id with non-existent IDs (route="unknown", status_code="404" in Prometheus)
+    // 404s — GET /users/:id with non-existent IDs (~1–2% of GET traffic)
     get_404: {
       executor: 'ramping-vus',
       exec: 'getUserByIdNotFound',
       stages: [
-        { duration: '3m', target: 0 },
-        { duration: '1m', target: 2 },
+        { duration: '2m', target: 2 },
         { duration: '6m', target: 2 },
+        { duration: '2m', target: 4 }, // spike
+        { duration: '2m', target: 2 },
         { duration: DURATION, target: 2 },
       ],
     },
@@ -115,14 +131,14 @@ export function getUserById() {
   const id = userIds[Math.floor(Math.random() * userIds.length)];
   const res = http.get(`${BASE_URL}/users/${id}`);
   check(res, { 'get_by_id ok': r => r.status === 200 || r.status === 404 });
-  sleep(0.1 + Math.random() * 0.2);
+  sleep(0.2 + Math.random() * 0.3); // 200–500ms think time
 }
 
 export function getUserWithProfile() {
   const id = userIds[Math.floor(Math.random() * userIds.length)];
   const res = http.get(`${BASE_URL}/users/${id}/info`);
   check(res, { 'get_user_with_profile ok': r => r.status === 200 || r.status === 404 });
-  sleep(0.1 + Math.random() * 0.2);
+  sleep(0.2 + Math.random() * 0.3); // 200–500ms think time
 }
 
 export function getUserByIdNotFound() {
@@ -136,7 +152,7 @@ export function listUsers() {
   const page = Math.ceil(Math.random() * 3); // pages 1-3
   const res = http.get(`${BASE_URL}/users?page=${page}&limit=10`);
   check(res, { 'list ok': r => r.status === 200 });
-  sleep(0.5 + Math.random() * 0.5); // 500ms-1s think time
+  sleep(0.8 + Math.random() * 0.7); // 800ms–1.5s browsing
 }
 
 export function createUser() {
@@ -147,7 +163,19 @@ export function createUser() {
     { headers: { 'Content-Type': 'application/json' } },
   );
   check(res, { 'create ok': r => r.status === 201 });
-  sleep(3 + Math.random() * 2); // writes are infrequent — 3-5s between requests
+  sleep(3 + Math.random() * 2); // 3–5s between writes
+}
+
+export function updateUser() {
+  const id = userIds[Math.floor(Math.random() * userIds.length)];
+  const rand = Math.random().toString(36).slice(2, 6);
+  const res = http.patch(
+    `${BASE_URL}/users/${id}`,
+    JSON.stringify({ name: `Updated ${rand}` }),
+    { headers: { 'Content-Type': 'application/json' } },
+  );
+  check(res, { 'update ok': r => r.status === 200 });
+  sleep(2 + Math.random() * 2); // 2–4s between updates
 }
 
 export function healthCheck() {

@@ -30,7 +30,7 @@ export const config = {
   logLevel: requireEnv('LOG_LEVEL', 'info'),
   logFile: env === 'development' ? 'logs/app.log' : undefined,
   lokiUrl: process.env.LOKI_URL ?? undefined,
-  enableFakeSlowness: parseBoolEnv('ENABLE_FAKE_SLOWNESS', true),
+  enableFakeSlowness: parseBoolEnv('ENABLE_FAKE_SLOWNESS', env !== 'test'),
   rateLimit: {
     windowMs: parseIntEnv('RATE_LIMIT_WINDOW_MS', 60_000),
     max: parseIntEnv('RATE_LIMIT_MAX', 100),

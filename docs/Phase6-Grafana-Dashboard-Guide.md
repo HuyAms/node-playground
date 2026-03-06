@@ -9,7 +9,7 @@ Build one dashboard entirely in the Grafana UI. No JSON import. Each step ends w
 ### What this dashboard is
 
 **One-sentence definition:**  
-A single **HTTP API health** dashboard that answers: _"Are my services up, how busy are they, how fast and how correct are the responses?"_
+A single **HTTP API health** dashboard that answers: *"Are my services up, how busy are they, how fast and how correct are the responses?"*
 
 **Scope:**
 
@@ -31,12 +31,14 @@ So: **"HTTP API health for user-management and user-info, with route (and option
 
 Keep only metrics that answer a clear question. Each panel should have an obvious meaning.
 
+
 | Panel                    | Metric(s)                                                          | Question it answers                                                | Cognitive load note                                                                                                |
 | ------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
 | **Traffic & errors**     | `rate(http_requests_total)`, 5xx rate                              | "How much traffic? Are we throwing errors?"                        | One time series: request rate; one: error rate. Titles like "Request rate" and "Error rate (5xx)" make it obvious. |
 | **P95 latency**          | `histogram_quantile(0.95, ...)` on `http_request_duration_seconds` | "How slow are responses?"                                          | Single number + green/yellow/red. "P95 latency" in the title = "95% of requests are faster than this."             |
 | **In-flight requests**   | `http_requests_in_flight`                                          | "How many requests are currently being processed?"                 | One number + sparkline. "In-flight" = "right now." High = saturation/backlog.                                      |
 | **Latency distribution** | `http_request_duration_seconds` buckets                            | "Where does latency sit over time—mostly fast or with long tails?" | Heatmap: time vs latency bucket. No need to remember PromQL—title "Latency distribution" is enough.                |
+
 
 **Optional (Phase D / extra rows):**
 
@@ -50,24 +52,21 @@ Raw counters (e.g. `http_requests_total` without `rate()`), process memory from 
 ### Keeping cognitive load low
 
 - **"What does each graph represent?"**  
-  Every panel has a **short, specific title** (e.g. "Traffic & errors", "P95 latency", "In-flight requests", "Latency distribution") and **legend text** that matches (e.g. "Request rate", "Error rate (5xx)"). No generic "Metric A" or "Series 1".
-
+Every panel has a **short, specific title** (e.g. "Traffic & errors", "P95 latency", "In-flight requests", "Latency distribution") and **legend text** that matches (e.g. "Request rate", "Error rate (5xx)"). No generic "Metric A" or "Series 1".
 - **"How long until someone else gets it?"**  
-  Layout order: **traffic/errors first** (are we up and correct?), **then latency** (how fast?), **then in-flight** (are we saturated?), **then distribution** (where does latency sit?). Optional job/Node/cache below. One idea per panel; no combo panels that mix unrelated metrics.
-
+Layout order: **traffic/errors first** (are we up and correct?), **then latency** (how fast?), **then in-flight** (are we saturated?), **then distribution** (where does latency sit?). Optional job/Node/cache below. One idea per panel; no combo panels that mix unrelated metrics.
 - **"Why does In-flight not filter by route?"**  
-  The metric has no `route` label, so the panel stays global. Add a **short panel description** in Grafana (e.g. "Requests currently being handled across all routes") so 2 AM you doesn't wonder.
-
+The metric has no `route` label, so the panel stays global. Add a **short panel description** in Grafana (e.g. "Requests currently being handled across all routes") so 2 AM you doesn't wonder.
 - **Variables:**  
-  `$route` = "which route do I care about?"; `$job` (optional) = "which service?". "All" = `.*`. No extra variables unless they answer a clear question.
+`$route` = "which route do I care about?"; `$job` (optional) = "which service?". "All" = `.`*. No extra variables unless they answer a clear question.
 
 ---
 
 ## What you will learn
 
 - **Panel types:** Time series (trends), Gauge (single value + thresholds), Stat (value + sparkline), Heatmap (distribution over time).
-- **PromQL:** `rate()`, `histogram_quantile()`, `$__rate_interval`, label matchers (`=~`, `.*`).
-- **Variables:** `label_values(metric, label)` to fill dropdowns; `route=~"$route"` in queries; "All" = `.*`.
+- **PromQL:** `rate()`, `histogram_quantile()`, `$__rate_interval`, label matchers (`=~`, `.`*).
+- **Variables:** `label_values(metric, label)` to fill dropdowns; `route=~"$route"` in queries; "All" = `.`*.
 - **Microservices:** The `job` label (e.g. `user-management`, `user-info`) from Prometheus scrape config; per-service vs aggregate queries; when to add a `$job` variable to filter or compare services.
 
 ---
@@ -75,6 +74,7 @@ Raw counters (e.g. `http_requests_total` without `rate()`), process memory from 
 ## Available metrics
 
 Metrics you can use in panels. Prometheus adds the `job` label from scrape config (`user-management`, `user-info`). Use **Explore** or query `{__name__=~".+"}` in Prometheus to see live names and labels.
+
 
 | Metric                             | Type      | Labels                                          | Exposed by                                        |
 | ---------------------------------- | --------- | ----------------------------------------------- | ------------------------------------------------- |
@@ -88,6 +88,7 @@ Metrics you can use in panels. Prometheus adds the `job` label from scrape confi
 | `nodejs_heap_size_used_bytes`      | Gauge     | (Node)                                          | user-management, user-info                        |
 | `nodejs_eventloop_lag_p99_seconds` | Gauge     | (Node)                                          | user-management, user-info                        |
 
+
 **Recording rules** (pre-aggregated, from Phase 5): `job:http_requests_total:rate5m`, `job:http_request_errors:rate5m`, `job:http_request_duration_p95:5m` — these use `job` and optionally `route`/`method`; the P95 rule has no `route` (job-level only).
 
 ---
@@ -99,7 +100,7 @@ Metrics you can use in panels. Prometheus adds the `job` label from scrape confi
 - **Some traffic:** Hit both services so metrics exist. User-management: `curl http://localhost:3000/health`, `curl http://localhost:3000/users`. User-info: `curl http://localhost:3002/health`, `curl http://localhost:3002/user/1/profile`. Otherwise some panels may be empty.
 - **Flow:** Part 1 uses no variables; Part 2 adds `$route` and wires it.
 
-**Variable "All":** When you enable "Include All option" for `$route` (in Part 2), set the All value to `.*` so one query works for both "All" and a single route.
+**Variable "All":** When you enable "Include All option" for `$route` (in Part 2), set the All value to `.`* so one query works for both "All" and a single route.
 
 ---
 
@@ -112,7 +113,7 @@ Metrics you can use in panels. Prometheus adds the `job` label from scrape confi
 
 ## Step 1 — Create dashboard (no variable yet)
 
-1. Open **http://localhost:3001** → **Dashboards** → **New** → **New dashboard**.
+1. Open **[http://localhost:3001](http://localhost:3001)** → **Dashboards** → **New** → **New dashboard**.
 2. Save the dashboard (e.g. name: **Node Playground — Observability**).
 
 **Verify:**
@@ -125,11 +126,11 @@ Metrics you can use in panels. Prometheus adds the `job` label from scrape confi
 
 1. **Add** → **Visualization** → **Time series**.
 2. **Query A** — request rate (RED: Rate):
-   - `sum by(route) (rate(http_requests_total{route=~".*"}[$__rate_interval]))`
-   - Legend: `Request rate`.
+  - `sum by(route) (rate(http_requests_total{route=~".*"}[$__rate_interval]))`
+  - Legend: `Request rate`.
 3. **Query B** — 5xx error rate (RED: Errors):
-   - `sum(rate(http_requests_total{status_code=~"5..",route=~".*"}[$__rate_interval]))`
-   - Legend: `Error rate (5xx)`.
+  - `sum(rate(http_requests_total{status_code=~"5..",route=~".*"}[$__rate_interval]))`
+  - Legend: `Error rate (5xx)`.
 4. Panel title: e.g. **Traffic & errors**.
 5. **Panel description** (optional): In panel settings, add a short description (e.g. "Request rate and 5xx error rate over time") so the panel is self-explanatory.
 
@@ -144,19 +145,19 @@ Metrics you can use in panels. Prometheus adds the `job` label from scrape confi
 
 1. **Add** → **Visualization** → **Gauge**.
 2. **Query** — P95 latency (our recording rule is job-level only, so use raw query for per-route):
-   - `histogram_quantile(0.95, sum by(le) (rate(http_request_duration_seconds_bucket{route=~".*"}[$__rate_interval])))`
+  - `histogram_quantile(0.95, sum by(le) (rate(http_request_duration_seconds_bucket{route=~".*"}[$__rate_interval])))`
 3. **Standard options** → **Unit:** seconds (s) or milliseconds (ms).
 4. **Thresholds:** Base green, then:
-   - Green: 0–0.1 (0–100 ms)
-   - Yellow: 0.1–0.5 (100–500 ms)
-   - Red: > 0.5 (> 500 ms)
+  - Green: 0–0.1 (0–100 ms)
+  - Yellow: 0.1–0.5 (100–500 ms)
+  - Red: > 0.5 (> 500 ms)
 5. **Min:** 0, **Max:** 1 (or 2 if you test with very slow simulate).
 6. Panel title: e.g. **P95 latency**.
 7. **Panel description** (optional): e.g. "95% of requests complete within this duration."
 
 **Verify:**
 
-- Gauge shows a value (e.g. &lt; 0.1 s when idle).
+- Gauge shows a value (e.g. < 0.1 s when idle).
 - Run: `curl "http://localhost:3000/simulate/slow?ms=800"` a few times. Within a couple of minutes the gauge should move into yellow/red.
 
 ---
@@ -165,7 +166,7 @@ Metrics you can use in panels. Prometheus adds the `job` label from scrape confi
 
 1. **Add** → **Visualization** → **Stat**.
 2. **Query:** `sum(http_requests_in_flight)`
-   - (This metric has only `method`, not `route`, so we don't add a route filter here.)
+  - (This metric has only `method`, not `route`, so we don't add a route filter here.)
 3. **Panel options** → enable **Graph mode** / **Sparkline**.
 4. Panel title: e.g. **In-flight requests**.
 5. **Panel description** (optional): e.g. "Requests currently being handled across all routes." (Explains why this panel doesn't filter by `$route`.)
@@ -192,8 +193,8 @@ Metrics you can use in panels. Prometheus adds the `job` label from scrape confi
 
 ## Step 6 — Quick hardcoded check
 
-- [ ] All five panels show data (or consistently no data) with time range **Last 15 minutes** and recent traffic.
-- [ ] No variables exist yet.
+- All five panels show data (or consistently no data) with time range **Last 15 minutes** and recent traffic.
+- No variables exist yet.
 
 ---
 
@@ -207,14 +208,14 @@ Metrics you can use in panels. Prometheus adds the `job` label from scrape confi
 ## Step 7 — Add variable `$route`
 
 1. **Settings** (gear icon) → **Variables** → **Add variable**:
-   - **Name:** `route`
-   - **Type:** Query
-   - **Data source:** Prometheus
-   - **Query:** `label_values(http_requests_total, route)`
-   - **Refresh:** On dashboard load (or On time range change)
-   - **Include All option:** On
-   - **Custom all value:** `.*`
-   - Save.
+  - **Name:** `route`
+  - **Type:** Query
+  - **Data source:** Prometheus
+  - **Query:** `label_values(http_requests_total, route)`
+  - **Refresh:** On dashboard load (or On time range change)
+  - **Include All option:** On
+  - **Custom all value:** `.`*
+  - Save.
 
 **Verify:**
 
@@ -227,6 +228,7 @@ Metrics you can use in panels. Prometheus adds the `job` label from scrape confi
 
 In each panel that used `route=~".*"`, change it to `route=~"$route"`:
 
+
 | Panel              | Use `$route`? | Change                                           |
 | ------------------ | ------------- | ------------------------------------------------ |
 | Traffic & errors   | Yes           | Both queries: `route=~".*"` → `route=~"$route"`. |
@@ -234,7 +236,8 @@ In each panel that used `route=~".*"`, change it to `route=~"$route"`:
 | In-flight requests | No            | Metric has no `route` label; leave as-is.        |
 | Latency heatmap    | Yes           | `route=~".*"` → `route=~"$route"`.               |
 
-If you added any other panels that use `http_requests_total`, `http_request_duration_seconds_*`, or recording rules like `job:http_requests_total:rate5m`, add `route=~"$route"` to their query.
+
+If you added any other panels that use `http_requests_total`, `http_request_duration_seconds_`*, or recording rules like `job:http_requests_total:rate5m`, add `route=~"$route"` to their query.
 
 **Verify:**
 
@@ -246,13 +249,13 @@ If you added any other panels that use `http_requests_total`, `http_request_dura
 
 ## Step 9 — Final dashboard check
 
-- [ ] Variable **route** exists, populates from `label_values(http_requests_total, route)`, and has All = `.*`.
-- [ ] **Time Series:** Request rate + error rate overlaid; no "No data" with recent traffic.
-- [ ] **Gauge:** P95 with green/yellow/red; turns yellow/red after `curl "http://localhost:3000/simulate/slow?ms=800"`.
-- [ ] **Stat:** In-flight with sparkline; goes to 1+ during a long `/simulate/slow` request.
-- [ ] **Heatmap:** Latency distribution visible; shape changes with traffic/slow requests.
-- [ ] **Time range** "Last 15 minutes" updates all panels.
-- [ ] Changing **$route** filters Traffic, P95, and Heatmap; In-flight is unchanged (by design).
+- Variable **route** exists, populates from `label_values(http_requests_total, route)`, and has All = `.`*.
+- **Time Series:** Request rate + error rate overlaid; no "No data" with recent traffic.
+- **Gauge:** P95 with green/yellow/red; turns yellow/red after `curl "http://localhost:3000/simulate/slow?ms=800"`.
+- **Stat:** In-flight with sparkline; goes to 1+ during a long `/simulate/slow` request.
+- **Heatmap:** Latency distribution visible; shape changes with traffic/slow requests.
+- **Time range** "Last 15 minutes" updates all panels.
+- Changing **$route** filters Traffic, P95, and Heatmap; In-flight is unchanged (by design).
 
 ---
 
@@ -266,17 +269,17 @@ Prometheus adds the `job` label from the scrape config. The same metric name fro
 ### Optional: Panel with hardcoded job, then variable `$job`
 
 1. Add a **Time series** panel with query (hardcoded first):
-   - `sum by(job) (rate(http_requests_total{route=~"$route",job=~".*"}[$__rate_interval]))`
-   - Verify both jobs (user-management, user-info) show.
+  - `sum by(job) (rate(http_requests_total{route=~"$route",job=~".*"}[$__rate_interval]))`
+  - Verify both jobs (user-management, user-info) show.
 2. **Settings** → **Variables** → **Add variable**:
-   - **Name:** `job`
-   - **Type:** Query
-   - **Data source:** Prometheus
-   - **Query:** `label_values(http_requests_total, job)`
-   - **Refresh:** On dashboard load (or On time range change)
-   - **Include All option:** On
-   - **Custom all value:** `.*`
-   - Save.
+  - **Name:** `job`
+  - **Type:** Query
+  - **Data source:** Prometheus
+  - **Query:** `label_values(http_requests_total, job)`
+  - **Refresh:** On dashboard load (or On time range change)
+  - **Include All option:** On
+  - **Custom all value:** `.`*
+  - Save.
 3. In that panel, replace `job=~".*"` with `job=~"$job"`.
 
 This lets you compare user-management vs user-info request rates.
@@ -306,7 +309,7 @@ Useful to see effect of `GET /simulate/cpu?duration=2000`.
 Add:
 
 - **Stat:** Cache hit rate:  
-  `rate(cache_hits_total{job="user-management"}[5m]) / (rate(cache_hits_total{job="user-management"}[5m]) + rate(cache_misses_total{job="user-management"}[5m]))`
+`rate(cache_hits_total{job="user-management"}[5m]) / (rate(cache_hits_total{job="user-management"}[5m]) + rate(cache_misses_total{job="user-management"}[5m]))`
 - **Stat:** `cache_size{cache="users",job="user-management"}`
 
 ---
@@ -319,10 +322,10 @@ The app sends logs directly to Loki via **pino-loki** when `LOKI_URL` is set (e.
 
 1. Open **Explore** (compass icon) → select data source **Loki**.
 2. Use **LogQL** to query. Examples:
-   - All app logs: `{job="user-management"}`.
-   - Filter by text: `{job="user-management"} |= "requestId"` or `|= "error"`.
-   - By level: `{job="user-management"} | json | level="error"` (if the log line is JSON).
-   - Any labels: try `{}` and check which labels exist (e.g. `level`, `hostname`).
+  - All app logs: `{job="user-management"}`.
+  - Filter by text: `{job="user-management"} |= "requestId"` or `|= "error"`.
+  - By level: `{job="user-management"} | json | level="error"` (if the log line is JSON).
+  - Any labels: try `{}` and check which labels exist (e.g. `level`, `hostname`).
 3. Set time range and run query. You can correlate with metrics by time or by `requestId` in the log body.
 
 **Tip:** To see logs, generate traffic (e.g. `curl http://localhost:3000/users`) and ensure the app container has `LOKI_URL` set so pino-loki is active.
@@ -332,7 +335,8 @@ The app sends logs directly to Loki via **pino-loki** when `LOKI_URL` is set (e.
 ## Concepts
 
 - **Panel types:** Time series (trends), Gauge (single value + thresholds), Stat (value + sparkline), Heatmap (distribution over time).
-- **$\_\_rate_interval:** Grafana's rate window for Prometheus; use in `rate(...[$__rate_interval])` unless you need a fixed window.
-- **Variables:** `label_values(metric, label)` fills the dropdown; use `label=~"$var"` in queries. All = `.*` for "all values".
+- **$rate_interval:** Grafana's rate window for Prometheus; use in `rate(...[$__rate_interval])` unless you need a fixed window.
+- **Variables:** `label_values(metric, label)` fills the dropdown; use `label=~"$var"` in queries. All = `.`* for "all values".
 - **Recording rules:** `job:http_request_duration_p95:5m` is aggregated (no `route`); for per-route P95 use the raw `histogram_quantile(...)` with `route=~"$route"`.
 - **Multi-service:** The `job` label comes from Prometheus scrape config; use `job=~"$job"` in queries when you have a `$job` variable to filter or compare services.
+

@@ -1,5 +1,7 @@
 import { User, CreateUserInput, UpdateUserInput } from './users.schema.js';
 import { PaginationQuery, toOffset } from '../../shared/types/pagination.js';
+import { config } from '../../config.js';
+import { delay } from '../../utils/delay.js';
 
 export interface UserRepository {
   findAll(pagination: PaginationQuery): Promise<{ users: User[]; total: number }>;
@@ -112,6 +114,9 @@ export class InMemoryUserRepository implements UserRepository {
   }
 
   async findById(id: string): Promise<User | null> {
+    if (config.enableFakeSlowness) {
+      await delay(50 + Math.random() * 100);
+    }
     return this.store.find((u) => u.id === id) ?? null;
   }
 

@@ -33,13 +33,17 @@ DURATION=10m k6 run scripts/load.js
 
 `get_by_id` uses the same user IDs as the in-memory repo seed in `users.repository.ts` (IDs `1`–`10`). No seeding step required.
 
+### Mid-popular profile
+
+The script is tuned to simulate a **mid-popular** app: ~60–100 sustained RPS baseline, ~150–200 RPS at peak (2–2.5× spike), read-heavy mix (~90:10 read:write), with a small share of 404s. Use it to stress caches, DB, and dashboards under realistic traffic.
+
 ---
 
 ## What k6 concepts are used
 
 ### Virtual Users (VUs)
 
-A VU is a simulated user that loops through a function continuously. 10 VUs on `getUserById` means 10 concurrent users each hammering `GET /users/:id` in a tight loop with a small sleep between requests.
+A VU is a simulated user that loops through a function continuously. 25 VUs on `getUserById` means 25 concurrent users each calling `GET /users/:id` in a loop with a short think time between requests.
 
 ### Scenarios
 
@@ -67,11 +71,11 @@ Stages define how VUs ramp up/down over time for `ramping-vus`:
 
 ```js
 stages: [
-  { duration: '2m', target: 10 }, // ramp from 0 to 10 VUs over 2 minutes
-  { duration: '6m', target: 10 }, // hold at 10 VUs for 6 minutes
-  { duration: '2m', target: 25 }, // spike to 25 VUs (traffic surge)
-  { duration: '2m', target: 10 }, // ramp back down
-  { duration: DURATION, target: 10 }, // hold until stopped
+  { duration: '2m', target: 25 }, // ramp to baseline VUs
+  { duration: '6m', target: 25 }, // hold baseline
+  { duration: '2m', target: 55 }, // spike (traffic surge)
+  { duration: '2m', target: 25 }, // ramp back down
+  { duration: DURATION, target: 25 }, // hold until stopped
 ]
 ```
 
@@ -98,26 +102,24 @@ Green = passing, red = failing in terminal output.
 
 ## Traffic scenario design
 
-| Scenario | VUs | Route | What it shows in Prometheus |
+| Scenario | VUs (baseline → spike) | Route | What it shows in Prometheus |
 |---|---|---|---|
-| `get_by_id` | 10→25 | `GET /users/:id` (existing IDs) | Highest volume in `topk()`, cache hit rate ratio |
-| `list_users` | 5→12 | `GET /users` | Second in `topk()`, always hits DB |
-| `create_user` | 1 | `POST /users` | Low-volume writes, long think time |
-| `slow_requests` | 0→3→0 | `GET /simulate/slow` | P95 spike (starts at 4min, stops at 10min) |
-| `error_requests` | 0→4→0 | `GET /simulate/error` | Error rate spike (starts at 6min, triggers alert in Phase 7) |
-| `get_404` | 0→2 | `GET /users/:id` (non-existent IDs) | `route="unknown"`, `status_code="404"` — 404 rate in dashboards |
-| `health_probe` | 2 | `GET /health` | Background noise, flat baseline |
+| `get_by_id` | 25→55 | `GET /users/:id` (existing IDs) | Highest volume in `topk()`, cache hit rate ratio |
+| `list_users` | 12→28 | `GET /users` | Second in `topk()`, always hits DB |
+| `get_user_with_profile` | 20→45 | `GET /users/:id/info` | Heavy read route |
+| `create_user` | 2→4 | `POST /users` | Low-volume writes, long think time |
+| `update_user` | 1→3 | `PATCH /users/:id` | Occasional updates |
+| `get_404` | 2→4 | `GET /users/:id` (non-existent IDs) | `route="unknown"`, `status_code="404"` — 404 rate in dashboards |
+| `health_probe` | 3 (constant) | `GET /health` | Background noise, flat baseline |
 
 ### Timeline
 
 ```
 t=0m   All scenarios start
 t=2m   Baseline established — check sum by(route) in Prometheus
-t=4m   Slow requests start — watch P95 rise
-t=6m   Error injection starts — watch error rate climb
-t=9m   Error injection stops — error rate drops, alert resolves
-t=10m  Slow requests stop — P95 drops back
-t=12m+ Low steady state — run until Ctrl+C
+t=8m   Spike — VUs ramp up (~2–2.5×), watch RPS and cache in Grafana
+t=10m  Ramp back down
+t=12m+ Steady — run until Ctrl+C
 ```
 
 ---
@@ -131,10 +133,10 @@ sum by(route) (rate(http_requests_total[1m]))
 # Top 3 busiest routes
 topk(3, sum by(route) (rate(http_requests_total[1m])))
 
-# P95 latency — spikes between t=4m and t=10m
+# P95 latency — rises during spike (t=8–10m)
 histogram_quantile(0.95, sum by(le) (rate(http_request_duration_seconds_bucket[1m])))
 
-# Error rate % — spikes between t=6m and t=9m
+# Error rate %
 sum(rate(http_requests_total{status_code=~"5.."}[1m])) / sum(rate(http_requests_total[1m])) * 100
 
 # Cache hit rate

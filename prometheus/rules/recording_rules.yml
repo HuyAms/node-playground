@@ -1,19 +1,31 @@
+# Recording rules for HTTP API metrics — multi-service (user-management, user-info).
+# All rules preserve the job label so the dashboard can filter and compare by service.
+# Prefer these rules in Grafana panels (with job=~"$job", route=~"$route") to align with the 5m evaluation interval.
+
 groups:
   - name: http_request_rates
     interval: 15s
     rules:
-      # Per-route request rate — powers topk() and sum by(route) panels
+      # Request rate per service, route, method — dashboard rate panels with job=~"$job", route=~"$route"
       - record: job:http_requests_total:rate5m
         expr: sum by(job, route, method) (rate(http_requests_total[5m]))
 
-      # Per-route 5xx error rate — used in error ratio panels and alerts
+      # 5xx error rate per service and route — dashboard error panels
       - record: job:http_request_errors:rate5m
         expr: sum by(job, route) (rate(http_requests_total{status_code=~"5.."}[5m]))
 
-      # P95 latency — expensive histogram_quantile pre-computed once per scrape
+      # P95 latency per service (all routes) — overview/gauge and "all routes" time series
       - record: job:http_request_duration_p95:5m
         expr: >
           histogram_quantile(
             0.95,
             sum by(job, le) (rate(http_request_duration_seconds_bucket[5m]))
+          )
+
+      # P95 latency per service and route — dashboard P95 when $route is set
+      - record: job:http_request_duration_p95:5m_per_route
+        expr: >
+          histogram_quantile(
+            0.95,
+            sum by(job, route, le) (rate(http_request_duration_seconds_bucket[5m]))
           )
