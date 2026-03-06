@@ -13,6 +13,7 @@
 3. [Prometheus Concepts — Teaching Section](#3-prometheus-concepts--teaching-section)
 4. [Implementation](#4-implementation)
 5. [Grafana Dashboard](#5-grafana-dashboard)
+   - [How to Build a Dashboard: The RED Method](#how-to-build-a-dashboard-the-red-method)
 6. [Alerting](#6-alerting)
 7. [Operational Best Practices](#7-operational-best-practices)
 8. [Common Mistakes](#8-common-mistakes)
@@ -26,6 +27,7 @@
 Prometheus **pulls** metrics from your app. Your app does not push data to Prometheus.
 
 **Why pull?**
+
 - Prometheus controls the scrape schedule — it can detect if a target is down (no push = silent failure vs. `up == 0`)
 - Easier to reason about backpressure: if Prometheus is slow, it skips a scrape; your app never blocks
 - Service discovery is simpler: Prometheus discovers targets, not the other way around
@@ -47,6 +49,7 @@ http_requests_total{method="GET",route="/users",status="200"} 1423
 ### Scrape Interval
 
 Default: **15 seconds**. This means:
+
 - `rate()` functions need at least a 4× window (`[1m]` minimum for 15s scrape)
 - Lower interval = higher Prometheus storage and CPU load
 - For most REST APIs, 15s gives enough resolution for dashboards and alerts
@@ -73,13 +76,13 @@ flowchart LR
 ### docker-compose.yml
 
 ```yaml
-version: "3.9"
+version: '3.9'
 
 services:
   app:
     build: .
     ports:
-      - "3000:3000"
+      - '3000:3000'
     env_file:
       - .env
     volumes:
@@ -91,16 +94,16 @@ services:
   prometheus:
     image: prom/prometheus:v2.52.0
     ports:
-      - "9090:9090"
+      - '9090:9090'
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./prometheus/rules:/etc/prometheus/rules:ro
       - prometheus_data:/prometheus
     command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-      - "--storage.tsdb.path=/prometheus"
-      - "--storage.tsdb.retention.time=15d"
-      - "--web.enable-lifecycle"          # allows POST /-/reload
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle' # allows POST /-/reload
     restart: unless-stopped
     networks:
       - observability
@@ -108,7 +111,7 @@ services:
   grafana:
     image: grafana/grafana:10.4.2
     ports:
-      - "3001:3000"
+      - '3001:3000'
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
@@ -124,7 +127,7 @@ services:
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.49.1
     ports:
-      - "8080:8080"
+      - '8080:8080'
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
@@ -159,12 +162,12 @@ Instrument what answers an operational question. Group by system type — differ
 
 An online system handles requests in real time and must respond quickly. The four essential metrics:
 
-| Metric | Type | Metric Name | Why it matters |
-|---|---|---|---|
-| Request rate | Counter | `http_requests_total` | Baseline for capacity and anomaly detection. A sudden drop means the app is down or traffic was lost. |
-| Latency | Histogram | `http_request_duration_seconds` | User-perceived performance. Report p50, p95, p99 — average hides tail latency. |
-| Error rate | Counter (derived) | `http_requests_total{status=~"5.."}` | Primary SLO signal. Rising errors = users are experiencing failures. |
-| In-progress requests | Gauge | `http_requests_in_flight` | Current concurrency. Unbounded growth indicates a slow upstream causing queuing. |
+| Metric               | Type              | Metric Name                          | Why it matters                                                                                        |
+| -------------------- | ----------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Request rate         | Counter           | `http_requests_total`                | Baseline for capacity and anomaly detection. A sudden drop means the app is down or traffic was lost. |
+| Latency              | Histogram         | `http_request_duration_seconds`      | User-perceived performance. Report p50, p95, p99 — average hides tail latency.                        |
+| Error rate           | Counter (derived) | `http_requests_total{status=~"5.."}` | Primary SLO signal. Rising errors = users are experiencing failures.                                  |
+| In-progress requests | Gauge             | `http_requests_in_flight`            | Current concurrency. Unbounded growth indicates a slow upstream causing queuing.                      |
 
 **PromQL for each:**
 
@@ -194,17 +197,17 @@ These four map directly to the metrics instrumented in `src/shared/metrics.ts` a
 
 Every metric must answer an operational question. If you cannot answer "what alert would I write for this?", do not instrument it.
 
-| Metric | Type | Operational Question |
-|---|---|---|
-| `http_request_duration_seconds` | Histogram | Is latency degrading? What's the p95? |
-| `http_requests_total` | Counter | What is the request rate? Which routes are hit most? |
-| `http_requests_in_flight` | Gauge | Is the app currently overloaded? |
-| `process_cpu_seconds_total` | Counter (default) | Is the app CPU-bound? |
-| `process_resident_memory_bytes` | Gauge (default) | Is memory growing (leak)? |
-| `nodejs_eventloop_lag_seconds` | Gauge (default) | Is the event loop blocked? |
-| `process_start_time_seconds` | Gauge (default) | How long has the process been up? |
-| `container_cpu_usage_seconds_total` | Counter (cAdvisor) | CPU usage at container level |
-| `container_memory_usage_bytes` | Gauge (cAdvisor) | Memory at container level vs limit |
+| Metric                              | Type               | Operational Question                                 |
+| ----------------------------------- | ------------------ | ---------------------------------------------------- |
+| `http_request_duration_seconds`     | Histogram          | Is latency degrading? What's the p95?                |
+| `http_requests_total`               | Counter            | What is the request rate? Which routes are hit most? |
+| `http_requests_in_flight`           | Gauge              | Is the app currently overloaded?                     |
+| `process_cpu_seconds_total`         | Counter (default)  | Is the app CPU-bound?                                |
+| `process_resident_memory_bytes`     | Gauge (default)    | Is memory growing (leak)?                            |
+| `nodejs_eventloop_lag_seconds`      | Gauge (default)    | Is the event loop blocked?                           |
+| `process_start_time_seconds`        | Gauge (default)    | How long has the process been up?                    |
+| `container_cpu_usage_seconds_total` | Counter (cAdvisor) | CPU usage at container level                         |
+| `container_memory_usage_bytes`      | Gauge (cAdvisor)   | Memory at container level vs limit                   |
 
 ### HTTP Duration Histogram — Bucket Design
 
@@ -215,6 +218,7 @@ Default prom-client buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 
 ```
 
 For a REST API, these are reasonable. Adjust if your API has different characteristics:
+
 - Pure DB-backed API: keep defaults
 - File upload endpoints: add `[10, 30, 60]`
 - Sub-millisecond cache endpoints: add `[0.001, 0.002, 0.003]`
@@ -226,11 +230,13 @@ The tradeoff: more buckets = more memory per time series = more Prometheus stora
 Labels create time series. Every unique combination of label values = one time series stored forever.
 
 **Safe labels** (bounded cardinality):
+
 - `method`: GET, POST, PATCH, DELETE — 4 values
 - `route`: `/users`, `/users/:id`, `/health` — bounded by your route table
 - `status`: HTTP status code — ~10 realistic values
 
 **Never use as labels:**
+
 - `userId` — millions of time series, Prometheus crashes
 - `requestId` / `traceId` — unique per request
 - `email`, `ip`, `sessionId` — unbounded
@@ -249,17 +255,18 @@ You must extract this from `req.route.path` after the route handler runs (in a r
 Metric names are permanent. Once a name is scraped and stored, renaming it breaks all dashboards and alerts. Get it right upfront.
 
 **Pattern:**
+
 ```
 <namespace>_<subsystem>_<name>_<unit>[_suffix]
 ```
 
-| Part | Description | Examples |
-|---|---|---|
-| `namespace` | Library or system origin | `http`, `process`, `db`, `rpc`, `nodejs` |
-| `subsystem` | Optional component within the system | `server`, `client`, `pool` |
-| `name` | What is being measured | `requests`, `duration`, `connections`, `errors` |
-| `unit` | Base SI unit — always base, never derived | `seconds`, `bytes` |
-| `suffix` | Type-specific — see per-type rules below | `_total`, `_bucket`, `_sum` |
+| Part        | Description                               | Examples                                        |
+| ----------- | ----------------------------------------- | ----------------------------------------------- |
+| `namespace` | Library or system origin                  | `http`, `process`, `db`, `rpc`, `nodejs`        |
+| `subsystem` | Optional component within the system      | `server`, `client`, `pool`                      |
+| `name`      | What is being measured                    | `requests`, `duration`, `connections`, `errors` |
+| `unit`      | Base SI unit — always base, never derived | `seconds`, `bytes`                              |
+| `suffix`    | Type-specific — see per-type rules below  | `_total`, `_bucket`, `_sum`                     |
 
 ---
 
@@ -310,11 +317,11 @@ queue_size_kb            ← use _bytes, not derived units
 
 Prometheus auto-generates three series from a Histogram registration:
 
-| Auto-generated series | Meaning |
-|---|---|
+| Auto-generated series     | Meaning                               |
+| ------------------------- | ------------------------------------- |
 | `<name>_bucket{le="..."}` | Cumulative count of observations ≤ le |
-| `<name>_sum` | Sum of all observed values |
-| `<name>_count` | Total number of observations |
+| `<name>_sum`              | Sum of all observed values            |
+| `<name>_count`            | Total number of observations          |
 
 Always include the unit in the base name. Never add `_histogram` — it is redundant.
 
@@ -343,13 +350,13 @@ Prefer Histogram over Summary in almost all cases: Summaries compute quantiles c
 
 Always use base SI units in the name. Never encode derived units (milliseconds, kilobytes) — they create ambiguity and break tooling that expects base units.
 
-| Concept | Correct suffix | Never use |
-|---|---|---|
-| Time / duration | `_seconds` | `_ms`, `_milliseconds`, `_minutes` |
-| Data size | `_bytes` | `_kb`, `_megabytes`, `_mb` |
-| Cumulative counts | `_total` suffix | `_count`, `_num`, `_counter` |
-| Ratios (0–1) | `_ratio` | `_percent`, `_pct` |
-| Temperatures | `_celsius` | `_fahrenheit` |
+| Concept           | Correct suffix  | Never use                          |
+| ----------------- | --------------- | ---------------------------------- |
+| Time / duration   | `_seconds`      | `_ms`, `_milliseconds`, `_minutes` |
+| Data size         | `_bytes`        | `_kb`, `_megabytes`, `_mb`         |
+| Cumulative counts | `_total` suffix | `_count`, `_num`, `_counter`       |
+| Ratios (0–1)      | `_ratio`        | `_percent`, `_pct`                 |
+| Temperatures      | `_celsius`      | `_fahrenheit`                      |
 
 ---
 
@@ -362,10 +369,12 @@ Always use base SI units in the name. Never encode derived units (milliseconds, 
 **What problem it solves:** Counting events over time — requests, errors, bytes sent. You cannot directly query a counter for a rate; you use `rate()` to compute the per-second increase.
 
 **When NOT to use it:**
+
 - Do not use a Counter for anything that can decrease (e.g., current connections, queue depth). That is a Gauge.
 - Do not read the raw counter value in dashboards — it is meaningless without a rate function.
 
 **Real PromQL example:**
+
 ```promql
 # Requests per second over last 5 minutes
 rate(http_requests_total[5m])
@@ -383,10 +392,12 @@ rate(http_requests_total{status=~"5.."}[5m])
 **What problem it solves:** Measuring current state — memory usage, number of in-flight requests, queue length, temperature.
 
 **When NOT to use it:**
+
 - Do not use a Gauge for event counts. If Prometheus scrapes 1 second late, you lose that data. Counters are cumulative; Gauges are not.
 - Do not use `rate()` on a Gauge — it is meaningless.
 
 **Real PromQL example:**
+
 ```promql
 # Current in-flight requests
 http_requests_in_flight
@@ -395,7 +406,7 @@ http_requests_in_flight
 process_resident_memory_bytes / 1024 / 1024
 
 # Container memory usage as % of limit
-container_memory_usage_bytes{name="user-management-app-1"} 
+container_memory_usage_bytes{name="user-management-app-1"}
   / container_spec_memory_limit_bytes{name="user-management-app-1"} * 100
 ```
 
@@ -415,14 +426,17 @@ container_memory_usage_bytes{name="user-management-app-1"}
 Each `le` (less than or equal) label is a cumulative counter. If `le="0.5"` has value 900 and `le="1.0"` has value 950, then 50 requests took between 500ms and 1s.
 
 **`_sum` and `_count`:**
+
 - Average latency = `rate(metric_sum[5m]) / rate(metric_count[5m])`
 - Count alone = request rate
 
 **When NOT to use it:**
+
 - Do not use Histogram for values that are not bounded and meaningfully distributed (e.g., user IDs). Use it for durations, sizes, latencies.
 - Do not define too many buckets (>15) — each bucket is a separate time series per label combination.
 
 **Real PromQL example:**
+
 ```promql
 # p95 latency across all routes
 histogram_quantile(0.95,
@@ -444,12 +458,14 @@ rate(http_request_duration_seconds_sum[5m])
 ### 3.4 `rate()` vs `irate()`
 
 **`rate(metric[window])`**
+
 - Calculates per-second average rate over the entire window
 - Smooths out spikes
 - Use for dashboards, slow-moving alerts, SLO calculations
 - Minimum window: 4× scrape interval (15s scrape → 1m minimum window)
 
 **`irate(metric[window])`**
+
 - Uses only the last two data points in the window
 - Highly sensitive to recent spikes
 - Use for debugging a live incident, not for alerting
@@ -472,9 +488,11 @@ irate(http_requests_total[5m])
 **What it is:** A function that estimates a percentile from Histogram bucket data.
 
 **Syntax:**
+
 ```promql
 histogram_quantile(φ, sum by (le) (rate(metric_bucket[window])))
 ```
+
 - `φ` is the quantile: 0.5 = median, 0.95 = p95, 0.99 = p99
 - `sum by (le)` is required — it aggregates across all instances
 - `rate(...)` converts cumulative counters to per-second rates first
@@ -486,6 +504,7 @@ If you have multiple app replicas, each emits its own bucket series. You must su
 The result is approximate. Accuracy depends on bucket resolution around the target percentile. If p95 falls between the 0.5 and 1.0 second buckets, the estimate is interpolated linearly.
 
 **When NOT to use it:**
+
 - Do not compute quantiles without `rate()` — raw cumulative buckets give wrong results
 - Do not use for exact values where accuracy matters (use a Summary if you need per-instance exact quantiles, though Summaries cannot be aggregated across instances)
 
@@ -496,15 +515,18 @@ The result is approximate. Accuracy depends on bucket resolution around the targ
 **What they are:** Pre-computed PromQL expressions stored as new time series. Prometheus evaluates them on a schedule and stores the result.
 
 **What problem they solve:**
+
 - Expensive queries (histogram_quantile over many series) run on every Grafana panel refresh — slow dashboards
 - Recording rules compute once per evaluation interval, dashboards query the cheap pre-computed result
 - Enable alerting on complex expressions without re-computing them in the alert rule
 
 **When NOT to use them:**
+
 - Do not create a recording rule for every metric — only for queries that are slow or used in multiple places
 - Do not use for exploration/ad-hoc queries
 
 **Naming convention:** `level:metric:operation`
+
 ```yaml
 # prometheus/rules/recording.yml
 groups:
@@ -534,18 +556,20 @@ groups:
 Alerts fire when a PromQL expression evaluates to a non-zero result for a sustained `for` duration.
 
 **Anatomy of an alert:**
+
 ```yaml
 - alert: AlertName
   expr: <PromQL that is non-zero when the problem exists>
-  for: 5m          # must be true for this long to avoid flapping
+  for: 5m # must be true for this long to avoid flapping
   labels:
     severity: critical
   annotations:
-    summary: "Human-readable summary"
-    description: "Detailed description with {{ $value }}"
+    summary: 'Human-readable summary'
+    description: 'Detailed description with {{ $value }}'
 ```
 
 **`for` duration matters:**
+
 - Too short: alerts flap on transient spikes
 - Too long: you get paged late
 - 5m is a good starting point for most production alerts
@@ -563,7 +587,7 @@ npm install prom-client
 ### 4.2 Metrics Module — `src/shared/metrics.ts`
 
 ```typescript
-import { Registry, collectDefaultMetrics, Counter, Gauge, Histogram } from 'prom-client';
+import {Registry, collectDefaultMetrics, Counter, Gauge, Histogram} from 'prom-client';
 
 // Isolated registry — avoids polluting the global default registry,
 // which matters in test environments where modules are re-imported.
@@ -571,7 +595,7 @@ export const registry = new Registry();
 
 // Default metrics: process CPU, memory, event loop lag, file descriptors, uptime.
 // These are the first things you check when debugging a Node.js performance issue.
-collectDefaultMetrics({ register: registry });
+collectDefaultMetrics({register: registry});
 
 export const httpRequestsTotal = new Counter({
   name: 'http_requests_total',
@@ -601,18 +625,14 @@ export const httpRequestsInFlight = new Gauge({
 ### 4.3 Prometheus Middleware — `src/shared/middleware/metrics.ts`
 
 ```typescript
-import { Request, Response, NextFunction } from 'express';
-import {
-  httpRequestsTotal,
-  httpRequestDuration,
-  httpRequestsInFlight,
-} from '../metrics.js';
+import {Request, Response, NextFunction} from 'express';
+import {httpRequestsTotal, httpRequestDuration, httpRequestsInFlight} from '../metrics.js';
 
 export function metricsMiddleware(req: Request, res: Response, next: NextFunction): void {
   const method = req.method;
 
   // Increment in-flight BEFORE the handler runs
-  httpRequestsInFlight.inc({ method });
+  httpRequestsInFlight.inc({method});
 
   const end = httpRequestDuration.startTimer();
 
@@ -623,9 +643,9 @@ export function metricsMiddleware(req: Request, res: Response, next: NextFunctio
     const route = req.route?.path ?? 'unmatched';
     const status = String(res.statusCode);
 
-    httpRequestsTotal.inc({ method, route, status });
-    end({ method, route, status });
-    httpRequestsInFlight.dec({ method });
+    httpRequestsTotal.inc({method, route, status});
+    end({method, route, status});
+    httpRequestsInFlight.dec({method});
   });
 
   next();
@@ -635,8 +655,8 @@ export function metricsMiddleware(req: Request, res: Response, next: NextFunctio
 ### 4.4 Metrics Endpoint — add to `src/app.ts`
 
 ```typescript
-import { registry } from './shared/metrics.js';
-import { metricsMiddleware } from './shared/middleware/metrics.js';
+import {registry} from './shared/metrics.js';
+import {metricsMiddleware} from './shared/middleware/metrics.js';
 
 // Inside createApp(), before feature routes:
 
@@ -656,27 +676,27 @@ app.get('/metrics', async (_req, res) => {
 
 ```yaml
 global:
-  scrape_interval: 15s      # How often to scrape. Lower = more storage + CPU.
-  evaluation_interval: 15s  # How often to evaluate rules.
+  scrape_interval: 15s # How often to scrape. Lower = more storage + CPU.
+  evaluation_interval: 15s # How often to evaluate rules.
 
 rule_files:
   - /etc/prometheus/rules/*.yml
 
 scrape_configs:
-  - job_name: "user-management"
+  - job_name: 'user-management'
     static_configs:
-      - targets: ["app:3000"]
+      - targets: ['app:3000']
     # Relabeling: keep only essential labels to control cardinality.
     # By default, Prometheus adds instance and job labels automatically.
 
-  - job_name: "cadvisor"
+  - job_name: 'cadvisor'
     static_configs:
-      - targets: ["cadvisor:8080"]
+      - targets: ['cadvisor:8080']
     # cAdvisor exposes hundreds of metrics. Drop what you don't need
     # to reduce storage. Example:
     metric_relabel_configs:
       - source_labels: [__name__]
-        regex: "container_(cpu_usage_seconds_total|memory_usage_bytes|memory_working_set_bytes|spec_memory_limit_bytes|network_receive_bytes_total|network_transmit_bytes_total)"
+        regex: 'container_(cpu_usage_seconds_total|memory_usage_bytes|memory_working_set_bytes|spec_memory_limit_bytes|network_receive_bytes_total|network_transmit_bytes_total)'
         action: keep
 ```
 
@@ -688,7 +708,6 @@ scrape_configs:
 groups:
   - name: node_playground_alerts
     rules:
-
       # App is unreachable — highest priority
       - alert: AppDown
         expr: up{job="user-management"} == 0
@@ -696,8 +715,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "App is down"
-          description: "Prometheus cannot scrape {{ $labels.instance }}. The process may have crashed."
+          summary: 'App is down'
+          description: 'Prometheus cannot scrape {{ $labels.instance }}. The process may have crashed.'
 
       # More than 5% of requests are 5xx over a 5-minute window
       - alert: HighErrorRate
@@ -711,8 +730,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "High HTTP error rate"
-          description: "Error rate is {{ $value | humanizePercentage }} over the last 5 minutes."
+          summary: 'High HTTP error rate'
+          description: 'Error rate is {{ $value | humanizePercentage }} over the last 5 minutes.'
 
       # p95 latency exceeds 500ms sustained for 10 minutes
       - alert: HighP95Latency
@@ -724,8 +743,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "High p95 latency"
-          description: "p95 latency is {{ $value | humanizeDuration }}. Investigate slow routes."
+          summary: 'High p95 latency'
+          description: 'p95 latency is {{ $value | humanizeDuration }}. Investigate slow routes.'
 
       # Container is using more than 90% of its memory limit
       - alert: ContainerMemoryNearLimit
@@ -738,13 +757,27 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Container memory near limit"
-          description: "Container {{ $labels.name }} is at {{ $value | humanizePercentage }} of memory limit. OOM kill imminent."
+          summary: 'Container memory near limit'
+          description: 'Container {{ $labels.name }} is at {{ $value | humanizePercentage }} of memory limit. OOM kill imminent.'
 ```
 
 ---
 
 ## 5. Grafana Dashboard
+
+### How to Build a Dashboard: The RED Method
+
+Use a consistent framework so every service dashboard answers the same questions. The **RED Method** (Tom Wilkie, Grafana Labs) is a microservices-oriented checklist: for every service, monitor **[R]ate**, **[E]rrors**, and **[D]uration** ([_The RED Method: How to Instrument Your Services_](https://grafana.com/blog/the-red-method-how-to-instrument-your-services/)).
+
+| Signal       | What to monitor                           | Why                                                                              |
+| ------------ | ----------------------------------------- | -------------------------------------------------------------------------------- |
+| **Rate**     | Requests per second                       | Baseline for capacity and anomaly detection; sudden drop = down or traffic lost. |
+| **Errors**   | Count (or ratio) of failing requests      | Direct proxy for user-visible failures; primary SLO signal.                      |
+| **Duration** | Latency distribution (e.g. p50, p95, p99) | User-perceived slowness; average hides tail latency.                             |
+
+Model every service the same way so you get a consistent view across the stack and can put people on call for code they didn’t write. RED is a good proxy for customer happiness: high error rate → users see failures; high duration → slow experience. Use it to drive which panels you add first (rate, error rate, latency) and to design meaningful alerts and SLAs.
+
+---
 
 ### Dashboard Layout
 
@@ -778,6 +811,7 @@ Row 4: Container Metrics (2 panels — cAdvisor)
 ```promql
 sum(rate(http_requests_total[5m])) by (route)
 ```
+
 Visualization: Time series. Stack by route to see which endpoint drives load.
 
 ---
@@ -791,6 +825,7 @@ sum(rate(http_requests_total{status=~"5.."}[5m]))
 /
 sum(rate(http_requests_total[5m]))
 ```
+
 Visualization: Time series, percentage unit. Add threshold line at 1% (warning) and 5% (critical).
 
 ---
@@ -804,6 +839,7 @@ histogram_quantile(0.95,
   sum by (le) (rate(http_request_duration_seconds_bucket[5m]))
 )
 ```
+
 Visualization: Time series, seconds unit. Add threshold at your SLO (e.g., 300ms).
 
 ---
@@ -815,6 +851,7 @@ Visualization: Time series, seconds unit. Add threshold at your SLO (e.g., 300ms
 ```promql
 sum(http_requests_in_flight)
 ```
+
 Visualization: Gauge or stat panel.
 
 ---
@@ -828,6 +865,7 @@ histogram_quantile(0.95,
   sum by (le, route) (rate(http_request_duration_seconds_bucket[5m]))
 )
 ```
+
 Visualization: Time series, one line per route.
 
 ---
@@ -839,6 +877,7 @@ Visualization: Time series, one line per route.
 ```promql
 rate(process_cpu_seconds_total{job="user-management"}[5m])
 ```
+
 Visualization: Time series, 0–1 range (1 = 100% of one core).
 
 ---
@@ -850,6 +889,7 @@ Visualization: Time series, 0–1 range (1 = 100% of one core).
 ```promql
 process_resident_memory_bytes{job="user-management"} / 1024 / 1024
 ```
+
 Visualization: Time series, MiB unit.
 
 ---
@@ -861,6 +901,7 @@ Visualization: Time series, MiB unit.
 ```promql
 nodejs_eventloop_lag_seconds{job="user-management"} * 1000
 ```
+
 Visualization: Time series, milliseconds unit. Alert if sustained above 100ms.
 
 ---
@@ -875,6 +916,7 @@ container_memory_usage_bytes{name=~"user-management.*"}
 container_spec_memory_limit_bytes{name=~"user-management.*"}
 * 100
 ```
+
 Visualization: Gauge, percentage. Set thresholds at 80% (warning) and 90% (critical).
 
 ---
@@ -888,6 +930,7 @@ rate(container_cpu_throttled_seconds_total{name=~"user-management.*"}[5m])
 /
 rate(container_cpu_usage_seconds_total{name=~"user-management.*"}[5m])
 ```
+
 Visualization: Time series, percentage of CPU time throttled.
 
 ---
@@ -904,12 +947,12 @@ Visualization: Time series, percentage of CPU time throttled.
 
 See `prometheus/rules/alerts.yml` in Section 4.6.
 
-| Alert | Severity | Why it matters |
-|---|---|---|
-| `AppDown` | critical | Process crashed or OOM-killed. Every request fails. |
-| `HighErrorRate` | critical | SLO breach. Users experiencing failures. |
-| `HighP95Latency` | warning | Tail latency degradation. Not yet a failure, but will become one. |
-| `ContainerMemoryNearLimit` | warning | OOM kill in minutes. Act before the app crashes. |
+| Alert                      | Severity | Why it matters                                                    |
+| -------------------------- | -------- | ----------------------------------------------------------------- |
+| `AppDown`                  | critical | Process crashed or OOM-killed. Every request fails.               |
+| `HighErrorRate`            | critical | SLO breach. Users experiencing failures.                          |
+| `HighP95Latency`           | warning  | Tail latency degradation. Not yet a failure, but will become one. |
+| `ContainerMemoryNearLimit` | warning  | OOM kill in minutes. Act before the app crashes.                  |
 
 ### Routing Alerts
 
@@ -918,28 +961,28 @@ Prometheus fires alerts to **Alertmanager**, which handles routing, deduplicatio
 ```yaml
 # alertmanager/alertmanager.yml
 route:
-  receiver: "slack-critical"
-  group_by: ["alertname", "job"]
+  receiver: 'slack-critical'
+  group_by: ['alertname', 'job']
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 4h
   routes:
     - match:
         severity: warning
-      receiver: "slack-warning"
+      receiver: 'slack-warning'
 
 receivers:
-  - name: "slack-critical"
+  - name: 'slack-critical'
     slack_configs:
-      - api_url: "<SLACK_WEBHOOK_URL>"
-        channel: "#incidents"
-        title: "{{ .GroupLabels.alertname }}"
-        text: "{{ range .Alerts }}{{ .Annotations.description }}{{ end }}"
+      - api_url: '<SLACK_WEBHOOK_URL>'
+        channel: '#incidents'
+        title: '{{ .GroupLabels.alertname }}'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
 
-  - name: "slack-warning"
+  - name: 'slack-warning'
     slack_configs:
-      - api_url: "<SLACK_WEBHOOK_URL>"
-        channel: "#alerts"
+      - api_url: '<SLACK_WEBHOOK_URL>'
+        channel: '#alerts'
 ```
 
 ---
@@ -948,27 +991,27 @@ receivers:
 
 ### Retention and Storage
 
-| Retention | Storage per million series | Use case |
-|---|---|---|
-| 15 days (default) | ~1.5 GB | Development, staging |
-| 90 days | ~9 GB | Production minimum |
-| >1 year | Remote storage | Long-term SLO analysis |
+| Retention         | Storage per million series | Use case               |
+| ----------------- | -------------------------- | ---------------------- |
+| 15 days (default) | ~1.5 GB                    | Development, staging   |
+| 90 days           | ~9 GB                      | Production minimum     |
+| >1 year           | Remote storage             | Long-term SLO analysis |
 
 For long-term storage, use **remote write** to Thanos or Grafana Mimir — Prometheus is not designed for multi-year retention on local disk.
 
 ```yaml
 # prometheus.yml — remote write example
 remote_write:
-  - url: "http://thanos-receive:10908/api/v1/receive"
+  - url: 'http://thanos-receive:10908/api/v1/receive'
 ```
 
 ### Scrape Interval Trade-offs
 
-| Interval | Resolution | Cost |
-|---|---|---|
-| 5s | High | High (×3 storage) |
-| 15s | Good (default) | Baseline |
-| 30s | Low | ½ storage |
+| Interval | Resolution     | Cost              |
+| -------- | -------------- | ----------------- |
+| 5s       | High           | High (×3 storage) |
+| 15s      | Good (default) | Baseline          |
+| 30s      | Low            | ½ storage         |
 
 - Do not go below 10s for application metrics — you gain little resolution and significantly increase Prometheus load.
 - Use 60s for infrastructure metrics (cAdvisor, Node Exporter) where second-level resolution is unnecessary.
@@ -978,6 +1021,7 @@ remote_write:
 For comprehensive metric naming rules per type (Counter, Gauge, Histogram), see [Section 2.5 — Metric Naming Conventions](#25-metric-naming-conventions).
 
 **Label conventions** (follow [Prometheus naming guide](https://prometheus.io/docs/practices/naming/)):
+
 - Labels: `snake_case`
 - No units as label values — units belong in the metric name
 - Boolean labels: avoid — use two separate metrics or an enum label (`state="active"` / `state="idle"`)
@@ -1026,10 +1070,10 @@ histogram_quantile(0.95,
 
 ```typescript
 // WRONG — creates one time series per user
-httpRequestsTotal.inc({ method, route, status, userId: req.user.id });
+httpRequestsTotal.inc({method, route, status, userId: req.user.id});
 
 // CORRECT — bounded cardinality
-httpRequestsTotal.inc({ method, route, status });
+httpRequestsTotal.inc({method, route, status});
 ```
 
 Effect: Prometheus runs out of memory. Tens of millions of time series crash the TSDB. This is the #1 cause of Prometheus outages.
@@ -1054,10 +1098,10 @@ Gauges represent current state. Counters accumulate forever. Missed scrapes are 
 
 ```typescript
 // WRONG — /users/123, /users/456, ... = infinite cardinality
-httpRequestsTotal.inc({ route: req.path });
+httpRequestsTotal.inc({route: req.path});
 
 // CORRECT — /users/:id = bounded
-httpRequestsTotal.inc({ route: req.route?.path ?? 'unmatched' });
+httpRequestsTotal.inc({route: req.route?.path ?? 'unmatched'});
 ```
 
 `req.route.path` is only available after the route handler matches. The middleware must observe it in the `res.on('finish')` callback, not at request start.
@@ -1135,4 +1179,8 @@ Prometheus scraping from the same IP repeatedly will trigger rate limits. Either
 
 ---
 
-*Generated for user-management · Express · pino · Docker Compose · prom-client*
+_Generated for user-management · Express · pino · Docker Compose · prom-client_
+
+# Resources
+
+- https://grafana.com/blog/the-red-method-how-to-instrument-your-services/ -https://grafana.com/docs/grafana/latest/visualizations/dashboards/build-dashboards/best-practices/
