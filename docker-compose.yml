@@ -19,7 +19,13 @@ services:
       - user-info
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "require('http').get('http://127.0.0.1:3000/health',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
       interval: 2s
       timeout: 5s
       start_period: 15s
@@ -47,8 +53,6 @@ services:
     image: grafana/loki:2.9.4
     ports:
       - '3100:3100'
-    volumes:
-      - loki_data:/loki
     command: -config.file=/etc/loki/local-config.yaml
     restart: unless-stopped
 
@@ -59,7 +63,6 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./prometheus/rules:/etc/prometheus/rules:ro
-      - prometheus_data:/prometheus
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -95,6 +98,4 @@ services:
     restart: unless-stopped
 
 volumes:
-  prometheus_data:
   grafana_data:
-  loki_data:
