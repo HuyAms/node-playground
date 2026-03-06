@@ -16,6 +16,12 @@ function parseIntEnv(key: string, fallback: number): number {
   return parsed;
 }
 
+function parseBoolEnv(key: string, fallback: boolean): boolean {
+  const raw = process.env[key];
+  if (raw === undefined) return fallback;
+  return raw === 'true' || raw === '1';
+}
+
 const env = requireEnv('NODE_ENV', 'development') as 'development' | 'production' | 'test';
 
 export const config = {
@@ -24,6 +30,7 @@ export const config = {
   logLevel: requireEnv('LOG_LEVEL', 'info'),
   logFile: env === 'development' ? 'logs/app.log' : undefined,
   lokiUrl: process.env.LOKI_URL ?? undefined,
+  enableFakeSlowness: parseBoolEnv('ENABLE_FAKE_SLOWNESS', true),
   rateLimit: {
     windowMs: parseIntEnv('RATE_LIMIT_WINDOW_MS', 60_000),
     max: parseIntEnv('RATE_LIMIT_MAX', 100),

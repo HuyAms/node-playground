@@ -1,3 +1,4 @@
+import type { Request, Response, NextFunction } from 'express';
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -7,6 +8,19 @@ import { registry, httpRequestsTotal, httpRequestsInFlight, httpRequestDuration 
 import { httpLogger } from './logger.js';
 import { requestId } from './middleware/requestId.js';
 import { getProfileById } from './data/seedProfiles.js';
+import { config } from './config.js';
+import { delay } from './utils/delay.js';
+
+async function fakeSlownessAndErrorMiddleware(_req: Request, res: Response, next: NextFunction): Promise<void> {
+  if (config.enableFakeSlowness) {
+    await delay(300 + Math.random() * 50);
+  }
+  if (Math.random() < config.fakeErrorRate) {
+    res.status(500).json({ error: { code: 'FAKE_ERROR', message: 'Simulated failure' } });
+    return;
+  }
+  next();
+}
 
 export function createApp(): express.Application {
   const app = express();
@@ -28,7 +42,7 @@ export function createApp(): express.Application {
     res.status(200).json({ status: 'ok' });
   });
 
-  app.get('/user/:id/profile', (req, res) => {
+  app.get('/user/:id/profile', fakeSlownessAndErrorMiddleware, (req, res) => {
     const profile = getProfileById(req.params.id);
     if (!profile) {
       res.status(404).json({ error: { code: 'PROFILE_NOT_FOUND', message: 'User profile not found' } });
