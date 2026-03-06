@@ -7,22 +7,22 @@ import {httpMetrics} from '@node-playground/observability';
 import {registry, httpRequestsTotal, httpRequestsInFlight, httpRequestDuration} from './metrics.js';
 import {httpLogger} from './logger.js';
 import {requestId} from './middleware/requestId.js';
+import {errorHandler} from './middleware/errorHandler.js';
+import {AppError, NotFoundError} from './errors/index.js';
 import {getProfileById} from './data/seedProfiles.js';
 import {config} from './config.js';
 import {delay} from './utils/delay.js';
 
 async function fakeSlownessAndErrorMiddleware(
   _req: Request,
-  res: Response,
+  _res: Response,
   next: NextFunction
 ): Promise<void> {
   if (config.enableFakeSlowness) {
     await delay(300 + Math.random() * 50);
   }
   if (Math.random() < config.fakeErrorRate) {
-    res
-      .status(500)
-      .json({error: {code: 'FAKE_ERROR', message: 'user-info: DB connection failure'}});
+    next(new AppError('user-info: DB connection failure', 500, 'FAKE_ERROR'));
     return;
   }
   next();
@@ -48,10 +48,10 @@ export function createApp(): express.Application {
     res.status(200).json({status: 'ok'});
   });
 
-  app.get('/user/:id/profile', fakeSlownessAndErrorMiddleware, (req, res) => {
+  app.get('/user/:id/profile', fakeSlownessAndErrorMiddleware, (req, res, next) => {
     const profile = getProfileById(req.params.id);
     if (!profile) {
-      res.status(404).json({error: {code: 'PROFILE_NOT_FOUND', message: 'User profile not found'}});
+      next(new NotFoundError('User profile', req.params.id));
       return;
     }
     res.status(200).json(profile);
@@ -60,6 +60,8 @@ export function createApp(): express.Application {
   app.use((_req, res) => {
     res.status(404).json({error: {code: 'RESOURCE_NOT_FOUND', message: 'Route not found'}});
   });
+
+  app.use(errorHandler);
 
   return app;
 }
