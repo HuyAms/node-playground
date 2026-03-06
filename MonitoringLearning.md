@@ -22,20 +22,17 @@ Learn Prometheus and Grafana by building real observability into this Node.js/Ex
 **Current state:** Phase 4 ✅ complete. Cache layer + simulate routes built — cache hit/miss/size metrics, ratio PromQL, `histogram_quantile()` with `sum by(le)` mastered.  
 **Next:** Phase 5 — PromQL mastery + recording rules.
 
+**Services:** Two apps — **app** (user-management) and **user-info**. Both expose `/metrics` with the same metric names (`http_requests_total`, `http_request_duration_seconds`, etc.). Prometheus scrapes both; the `job` label from the scrape config (`user-management`, `user-info`) distinguishes them. Dashboards and recording rules can aggregate across jobs or filter by `job`.
+
 ```
-src/
-  app.ts                     ← Express app factory, mount middleware here
-  server.ts                  ← Entry point, graceful shutdown
-  shared/
-    logger.ts                ← Pino logger (already wired)
-    middleware/
-      requestId.ts           ← x-request-id header middleware
-      errorHandler.ts        ← Centralized error handler
-  modules/
-    users/                   ← CRUD: routes, controller, service, repository, schema
-docker-compose.yml           ← Only has the `app` service right now
-prometheus/                  ← Empty, we fill this
-grafana/                     ← Empty, we fill this
+user/                        ← Main app (user-management)
+  src/app.ts, server.ts, shared/, modules/users/, ...
+user-info/                  ← Second service
+  src/app.ts, metrics, routes (e.g. /user/:id/profile), ...
+docker-compose.yml           ← app (user-management), user-info, Loki, Prometheus, Grafana
+prometheus/prometheus.yml    ← scrape_configs: user-management (app:3000), user-info (user-info:3000)
+prometheus/rules/            ← recording_rules.yml (aggregates by job)
+grafana/                     ← provisioning, dashboards
 ```
 
 ---
@@ -483,6 +480,8 @@ Build entirely in the Grafana UI (no JSON files). One dashboard with:
 - **Stat** — `http_requests_in_flight` with sparkline
 - **Heatmap** — latency distribution (shows the shape, not just percentiles)
 - **Dashboard variable** `$route` — filters all panels at once via `label_values()`
+
+With multiple services, use the `job` label (and optionally a `$job` dashboard variable) to filter or compare per service; see the Phase 6 guide in `docs/Phase6-Grafana-Dashboard-Guide.md` for the multi-service steps (Phase D).
 
 **Learn:** Panel types, time range controls, `$__rate_interval`, dashboard variables, color thresholds.
 

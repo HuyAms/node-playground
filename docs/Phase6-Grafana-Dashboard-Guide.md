@@ -4,13 +4,29 @@ Build one dashboard entirely in the Grafana UI. No JSON import. Each step ends w
 
 ---
 
+## What you will learn
+
+- **Panel types:** Time series (trends), Gauge (single value + thresholds), Stat (value + sparkline), Heatmap (distribution over time).
+- **PromQL:** `rate()`, `histogram_quantile()`, `$__rate_interval`, label matchers (`=~`, `.*`).
+- **Variables:** `label_values(metric, label)` to fill dropdowns; `route=~"$route"` in queries; “All” = `.*`.
+- **Microservices:** The `job` label (e.g. `user-management`, `user-info`) from Prometheus scrape config; per-service vs aggregate queries; when to add a `$job` variable to filter or compare services.
+
+---
+
 ## Before you start
 
-- **Stack running:** `docker compose up` (app, Loki, Prometheus, Grafana).
-- **Phase 5 done:** Recording rules exist in `prometheus/rules/recording_rules.yml` and Prometheus has loaded them (`curl -s http://localhost:9090/api/v1/rules` shows the rules).
-- **Some traffic:** Hit the app so metrics exist (e.g. `curl http://localhost:3000/health`, `curl http://localhost:3000/users`). Otherwise `$route` and some panels may be empty.
+- **Stack running:** `docker compose up` — app (user-management), user-info, Loki, Prometheus, Grafana.
+- **Phase 5 done:** Recording rules exist in `prometheus/rules/recording_rules.yml` and Prometheus has loaded them (`curl -s http://localhost:9090/api/v1/rules` shows the rules). Both jobs are scraped: `up{job=~"user-management|user-info"}` = 1 in Prometheus.
+- **Some traffic:** Hit both services so metrics exist. User-management: `curl http://localhost:3000/health`, `curl http://localhost:3000/users`. User-info: `curl http://localhost:3002/health`, `curl http://localhost:3002/user/1/profile`. Otherwise `$route` and some panels may be empty.
 
 **Variable “All”:** When you enable “Include All option” for `$route`, set the All value to `.*` so one query works for both “All” and a single route.
+
+---
+
+## Phase A — Dashboard and one variable (Steps 1–2)
+
+**Goal:** Create the dashboard, add `$route`, and build the first panel (Time Series: request rate + error rate).  
+**Verify:** Dropdown and panel show data; changing `$route` filters the panel.
 
 ---
 
@@ -31,7 +47,7 @@ Build one dashboard entirely in the Grafana UI. No JSON import. Each step ends w
 **Verify:**
 
 - Top of dashboard shows a **route** dropdown.
-- Dropdown lists routes (e.g. `/users`, `/health`, `/simulate/slow`) and an “All” option.
+- Dropdown lists routes from both services (e.g. `/users`, `/health`, `/simulate/slow`, `/user/:id/profile`) and an “All” option.
 - Changing the selection updates the variable (you’ll use it in later steps).
 
 ---
@@ -49,8 +65,15 @@ Build one dashboard entirely in the Grafana UI. No JSON import. Each step ends w
 
 **Verify:**
 
-- Both series show (request rate and error rate). If no traffic, zoom to “Last 5 minutes” and hit a few endpoints.
+- Both series show (request rate and error rate). If no traffic, zoom to “Last 5 minutes” and hit a few endpoints (e.g. `curl http://localhost:3000/users`, `curl http://localhost:3002/user/1/profile`).
 - Trigger errors: `curl "http://localhost:3000/simulate/error?rate=1.0"` a few times; error rate line should increase.
+
+---
+
+## Phase B — RED + saturation (Steps 3–4)
+
+**Goal:** Add Gauge (P95 latency) and Stat (in-flight). Optionally use the recording rule for P95 where it fits.  
+**Verify:** Thresholds and sparkline behave; Gauge turns yellow/red after slow requests; Stat shows 1+ during a long request.
 
 ---
 
@@ -85,6 +108,13 @@ Build one dashboard entirely in the Grafana UI. No JSON import. Each step ends w
 **Verify:**
 
 - Idle: value 0. Start a slow request in another terminal: `curl "http://localhost:3000/simulate/slow?ms=5000"`. While it runs, the stat should show 1 (or more). When it finishes, it drops back.
+
+---
+
+## Phase C — Distribution and wiring (Steps 5–6)
+
+**Goal:** Add the Heatmap, then ensure `$route` is applied to all panels that support it.  
+**Verify:** Heatmap shows a band of activity; changing `$route` filters Traffic, P95, and Heatmap; final checklist passes.
 
 ---
 
@@ -134,23 +164,62 @@ If you added any other panels that use `http_requests_total`, `http_request_dura
 
 ---
 
+## Phase D — Multi-service (optional)
+
+**Goal:** Understand the `job` label; add an optional `$job` variable and a panel that compares or filters by service.  
+**Verify:** You can switch “All” vs “user-management” vs “user-info” and see per-service series.
+
+Prometheus adds the `job` label from the scrape config. The same metric name from different targets appears as different series (e.g. `http_requests_total{job="user-management",...}` vs `job="user-info"`).
+
+### Optional variable `$job`
+
+1. **Settings** → **Variables** → **Add variable**:
+   - **Name:** `job`
+   - **Type:** Query
+   - **Data source:** Prometheus
+   - **Query:** `label_values(http_requests_total, job)`
+   - **Refresh:** On dashboard load (or On time range change)
+   - **Include All option:** On
+   - **Custom all value:** `.*`
+   - Save.
+
+### Optional panel: Request rate by service
+
+Add a **Time series** panel with query:
+
+```promql
+sum by(job) (rate(http_requests_total{route=~"$route",job=~"$job"}[$__rate_interval]))
+```
+
+This lets you compare user-management vs user-info request rates.
+
+### Where to use `$job`
+
+Add `job=~"$job"` to any query that should be filterable by service: Traffic & errors, P95 latency, Latency heatmap. In-flight can stay global, or add `job=~"$job"` if you want to filter it by service (both services expose it).
+
+**Verify:** With “All” you see both jobs; selecting one job shows only that service’s series.
+
+---
+
 ## Optional: Node and cache rows
+
+With two jobs, Node and Cache metrics may exist only for **user-management** (the main app). If a query returns no data, scope it: e.g. `nodejs_heap_size_used_bytes{job="user-management"}`.
 
 **Row — Node (USE-style)**  
 Add a Time series with:
 
-- `nodejs_heap_size_used_bytes`
-- `nodejs_eventloop_lag_p99_seconds`
-- `rate(process_cpu_seconds_total[1m])`
+- `nodejs_heap_size_used_bytes` (add `{job="user-management"}` if needed)
+- `nodejs_eventloop_lag_p99_seconds` (add `{job="user-management"}` if needed)
+- `rate(process_cpu_seconds_total[1m])` (add `{job="user-management"}` if needed)
 
 Useful to see effect of `GET /simulate/cpu?duration=2000`.
 
-**Row — Cache**  
+**Row — Cache** (user-management only; user-info has no cache)  
 Add:
 
 - **Stat:** Cache hit rate:  
-  `rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m]))`
-- **Stat:** `cache_size{cache="users"}`
+  `rate(cache_hits_total{job="user-management"}[5m]) / (rate(cache_hits_total{job="user-management"}[5m]) + rate(cache_misses_total{job="user-management"}[5m]))`
+- **Stat:** `cache_size{cache="users",job="user-management"}`
 
 ---
 
@@ -178,3 +247,4 @@ The app sends logs directly to Loki via **pino-loki** when `LOKI_URL` is set (e.
 - **$__rate_interval:** Grafana’s rate window for Prometheus; use in `rate(...[$__rate_interval])` unless you need a fixed window.
 - **Variables:** `label_values(metric, label)` fills the dropdown; use `label=~"$var"` in queries. All = `.*` for “all values”.
 - **Recording rules:** `job:http_request_duration_p95:5m` is aggregated (no `route`); for per-route P95 use the raw `histogram_quantile(...)` with `route=~"$route"`.
+- **Multi-service:** The `job` label comes from Prometheus scrape config; use `job=~"$job"` in queries when you have a `$job` variable to filter or compare services.

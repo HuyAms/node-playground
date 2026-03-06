@@ -54,6 +54,19 @@ export const options = {
       ],
     },
 
+    // GET /users/:id/info — user with profile (heavy read route)
+    get_user_with_profile: {
+      executor: 'ramping-vus',
+      exec: 'getUserWithProfile',
+      stages: [
+        { duration: '2m',  target: 14 }, // ramp up
+        { duration: '6m',  target: 14 }, // steady
+        { duration: '2m',  target: 32 }, // spike
+        { duration: '2m',  target: 14 }, // recover
+        { duration: DURATION, target: 14 }, // hold until stopped
+      ],
+    },
+
     // Low volume writes — creates new users so get_by_id has fresh IDs too
     create_user: {
       executor: 'ramping-vus',
@@ -62,34 +75,6 @@ export const options = {
         { duration: '2m',  target: 1 },
         { duration: '10m', target: 1 },
         { duration: DURATION, target: 1 },
-      ],
-    },
-
-    // Slow requests — kept deliberately low so P95 is elevated but not overwhelming
-    // Watch: histogram_quantile(0.95, ...) sits around 300ms
-    slow_requests: {
-      executor: 'ramping-vus',
-      exec: 'slowRequest',
-      stages: [
-        { duration: '4m',  target: 0 },  // delay start — let baseline establish first
-        { duration: '1m',  target: 3 },  // introduce slow traffic
-        { duration: '6m',  target: 3 },  // hold — P95 visibly rises in Grafana
-        { duration: '1m',  target: 0 },  // stop — watch P95 drop back
-        { duration: DURATION, target: 0 },
-      ],
-    },
-
-    // Error injection — 10% error rate, low volume
-    // Watch: error rate % query spikes to ~10%, alert fires in Phase 7
-    error_requests: {
-      executor: 'ramping-vus',
-      exec: 'errorRequest',
-      stages: [
-        { duration: '6m',  target: 0 },  // no errors during baseline
-        { duration: '1m',  target: 4 },  // incident starts
-        { duration: '3m',  target: 4 },  // incident sustained — alert should FIRE
-        { duration: '1m',  target: 0 },  // incident resolved
-        { duration: DURATION, target: 0 },
       ],
     },
 
@@ -133,6 +118,13 @@ export function getUserById() {
   sleep(0.1 + Math.random() * 0.2);
 }
 
+export function getUserWithProfile() {
+  const id = userIds[Math.floor(Math.random() * userIds.length)];
+  const res = http.get(`${BASE_URL}/users/${id}/info`);
+  check(res, { 'get_user_with_profile ok': r => r.status === 200 || r.status === 404 });
+  sleep(0.1 + Math.random() * 0.2);
+}
+
 export function getUserByIdNotFound() {
   const id = notFoundIds[Math.floor(Math.random() * notFoundIds.length)];
   const res = http.get(`${BASE_URL}/users/${id}`);
@@ -156,21 +148,6 @@ export function createUser() {
   );
   check(res, { 'create ok': r => r.status === 201 });
   sleep(3 + Math.random() * 2); // writes are infrequent — 3-5s between requests
-}
-
-export function slowRequest() {
-  // Vary the delay: 200-500ms — makes P95 more realistic than a flat 300ms spike
-  const ms = 200 + Math.floor(Math.random() * 300);
-  const res = http.get(`${BASE_URL}/simulate/slow?ms=${ms}`);
-  check(res, { 'slow ok': r => r.status === 200 });
-  sleep(0.5);
-}
-
-export function errorRequest() {
-  const res = http.get(`${BASE_URL}/simulate/error?rate=0.1`);
-  // 500s are expected — don't count as check failures
-  check(res, { 'error scenario': r => r.status === 200 || r.status === 500 });
-  sleep(0.3 + Math.random() * 0.2);
 }
 
 export function healthCheck() {
