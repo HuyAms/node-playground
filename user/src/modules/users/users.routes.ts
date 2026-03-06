@@ -16,7 +16,6 @@ const controller = new UsersController(service);
 export const usersRouter = Router();
 
 usersRouter.get('/', validate(paginationSchema, 'query'), controller.listUsers);
-usersRouter.get('/:id/info', validate(userIdParamSchema, 'params'), controller.getUserInfo);
 usersRouter.get('/:id', validate(userIdParamSchema, 'params'), controller.getUserById);
 usersRouter.post('/', validate(createUserSchema, 'body'), controller.createUser);
 usersRouter.patch(

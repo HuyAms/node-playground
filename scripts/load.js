@@ -54,19 +54,6 @@ export const options = {
       ],
     },
 
-    // GET /users/:id/info — user with profile (heavy read route)
-    get_user_with_profile: {
-      executor: 'ramping-vus',
-      exec: 'getUserWithProfile',
-      stages: [
-        { duration: '2m', target: 20 },
-        { duration: '6m', target: 20 },
-        { duration: '2m', target: 45 }, // spike
-        { duration: '2m', target: 20 },
-        { duration: DURATION, target: 20 },
-      ],
-    },
-
     // Low volume writes — creates new users so get_by_id has fresh IDs too
     create_user: {
       executor: 'ramping-vus',
@@ -131,13 +118,6 @@ export function getUserById() {
   const id = userIds[Math.floor(Math.random() * userIds.length)];
   const res = http.get(`${BASE_URL}/users/${id}`);
   check(res, { 'get_by_id ok': r => r.status === 200 || r.status === 404 });
-  sleep(0.2 + Math.random() * 0.3); // 200–500ms think time
-}
-
-export function getUserWithProfile() {
-  const id = userIds[Math.floor(Math.random() * userIds.length)];
-  const res = http.get(`${BASE_URL}/users/${id}/info`);
-  check(res, { 'get_user_with_profile ok': r => r.status === 200 || r.status === 404 });
   sleep(0.2 + Math.random() * 0.3); // 200–500ms think time
 }
 

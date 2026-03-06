@@ -9,7 +9,7 @@ export interface UserProfilePayload {
 export async function getUserProfile(
   userId: string,
   requestId?: string,
-): Promise<UserProfilePayload | null> {
+): Promise<UserProfilePayload> {
   const baseUrl = config.userInfoServiceUrl.replace(/\/$/, '');
   const url = `${baseUrl}/user/${encodeURIComponent(userId)}/profile`;
 
@@ -18,7 +18,6 @@ export async function getUserProfile(
 
   const res = await fetch(url, { headers });
   if (!res.ok) {
-    if (res.status === 404) return null;
     throw new Error(`user-info service returned ${res.status}`);
   }
   return (await res.json()) as UserProfilePayload;

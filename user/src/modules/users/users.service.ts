@@ -64,23 +64,13 @@ export class UsersService {
     return user;
   }
 
+  /** Get user from repo and profile from user-info; throws if either fails. */
   async getUserWithProfile(
     id: string,
     requestId?: string
-  ): Promise<{user: User; profile: UserProfilePayload | null}> {
+  ): Promise<{user: User; profile: UserProfilePayload}> {
     const user = await this.getUserById(id, requestId);
-    // let profile: UserProfilePayload | null = null;
-    // try {
-    //   profile = await getUserProfile(id, requestId);
-    // } catch (err) {
-    //   logger.warn(
-    //     {requestId, userId: id, err},
-    //     'user-info service unavailable, returning user without profile'
-    //   );
-    // }
-
     const profile = await getUserProfile(id, requestId);
-
     return {user, profile};
   }
 

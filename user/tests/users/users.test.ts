@@ -7,6 +7,15 @@ import { UsersService } from '../../src/modules/users/users.service.js';
 import { UsersController } from '../../src/modules/users/users.controller.js';
 import { errorHandler } from '../../src/shared/middleware/errorHandler.js';
 import { requestId } from '../../src/shared/middleware/requestId.js';
+import { getUserProfile } from '../../src/shared/userInfoClient.js';
+
+vi.mock('../../src/shared/userInfoClient.js', () => ({
+  getUserProfile: vi.fn().mockResolvedValue({
+    userId: '1',
+    displayName: 'Alice N.',
+    preferences: { theme: 'dark', locale: 'en-US' },
+  }),
+}));
 
 const app = createApp();
 
@@ -82,7 +91,7 @@ describe('GET /users', () => {
 // GET /users/:id
 // ---------------------------------------------------------------------------
 describe('GET /users/:id', () => {
-  it('returns the user when found', async () => {
+  it('returns the user with profile when found', async () => {
     const res = await request(app).get(`/users/${SEED_ID_1}`);
 
     expect(res.status).toBe(200);
@@ -91,6 +100,11 @@ describe('GET /users/:id', () => {
       name: 'Alice Nguyen',
       email: 'alice@example.com',
       role: 'admin',
+      profile: {
+        userId: '1',
+        displayName: 'Alice N.',
+        preferences: { theme: 'dark', locale: 'en-US' },
+      },
     });
   });
 
@@ -100,6 +114,15 @@ describe('GET /users/:id', () => {
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
     expect(res.body.error.message).toContain('nonexistent-id');
+  });
+
+  it('fails the request when user-info service fails', async () => {
+    vi.mocked(getUserProfile).mockRejectedValueOnce(new Error('user-info service returned 500'));
+
+    const res = await request(app).get(`/users/${SEED_ID_1}`);
+
+    expect(res.status).toBe(500);
+    expect(res.body.error.code).toBe('INTERNAL_SERVER_ERROR');
   });
 });
 

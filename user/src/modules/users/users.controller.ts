@@ -29,17 +29,6 @@ export class UsersController {
     try {
       const { id } = req.params;
       const requestId = req.headers['x-request-id'] as string | undefined;
-      const user = await this.service.getUserById(id, requestId);
-      res.status(200).json({ data: user });
-    } catch (err) {
-      next(err);
-    }
-  };
-
-  getUserInfo = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const { id } = req.params;
-      const requestId = req.headers['x-request-id'] as string | undefined;
       const { user, profile } = await this.service.getUserWithProfile(id, requestId);
       res.status(200).json({ data: { ...user, profile } });
     } catch (err) {

@@ -134,7 +134,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
         },
       },
     },
-    '/users/{id}/info': {
+    '/users/{id}': {
       parameters: [
         {
           name: 'id',
@@ -146,13 +146,13 @@ export const swaggerSpec: OpenAPIV3.Document = {
       ],
       get: {
         tags: ['Users'],
-        summary: 'Get user with profile',
+        summary: 'Get user by ID',
         description:
-          'Returns the user enriched with profile data (displayName, preferences) from the user-info service. If the user-info service is unavailable, returns the user with `profile: null`.',
-        operationId: 'getUserInfo',
+          'Returns the user from the database enriched with profile data from the user-info service. Fails the request if the user is not found or if the user-info service request fails.',
+        operationId: 'getUserById',
         responses: {
           '200': {
-            description: 'User with optional profile',
+            description: 'User with profile',
             content: {
               'application/json': {
                 schema: {
@@ -173,37 +173,6 @@ export const swaggerSpec: OpenAPIV3.Document = {
                       preferences: { theme: 'dark', locale: 'en-US' },
                     },
                   },
-                },
-              },
-            },
-          },
-          '404': { $ref: '#/components/responses/NotFoundError' },
-          '500': { $ref: '#/components/responses/InternalError' },
-        },
-      },
-    },
-    '/users/{id}': {
-      parameters: [
-        {
-          name: 'id',
-          in: 'path',
-          required: true,
-          description: 'User ID',
-          schema: { type: 'string', example: '1' },
-        },
-      ],
-      get: {
-        tags: ['Users'],
-        summary: 'Get user by ID',
-        operationId: 'getUserById',
-        responses: {
-          '200': {
-            description: 'User found',
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: { data: { $ref: '#/components/schemas/User' } },
                 },
               },
             },
@@ -292,8 +261,8 @@ export const swaggerSpec: OpenAPIV3.Document = {
       },
       UserWithProfile: {
         type: 'object',
-        description: 'User with optional profile from user-info service',
-        required: ['id', 'name', 'email', 'role', 'createdAt', 'updatedAt'],
+        description: 'User with profile from user-info service (GET /users/:id)',
+        required: ['id', 'name', 'email', 'role', 'createdAt', 'updatedAt', 'profile'],
         properties: {
           id: { type: 'string', example: '1' },
           name: { type: 'string', example: 'Alice Nguyen' },
@@ -301,10 +270,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
           role: { $ref: '#/components/schemas/UserRole' },
           createdAt: { type: 'string', format: 'date-time' },
           updatedAt: { type: 'string', format: 'date-time' },
-          profile: {
-            oneOf: [{ $ref: '#/components/schemas/UserProfile' }, { type: 'null' as const }],
-            description: 'Enriched profile from user-info service; null if service unavailable',
-          } as Record<string, unknown>,
+          profile: { $ref: '#/components/schemas/UserProfile' },
         },
       },
       CreateUserInput: {
