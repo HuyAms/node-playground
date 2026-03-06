@@ -63,8 +63,10 @@ export function createLogger(options: LoggerOptions) {
     pino.multistream(streams)
   );
 
+  const loggerWithJob = logger.child({job});
+
   const httpLogger = pinoHttp({
-    logger,
+    logger: loggerWithJob,
     genReqId: req => (req.headers['x-request-id'] as string) ?? crypto.randomUUID(),
     customProps: req => ({
       requestId: req.headers['x-request-id'],
@@ -85,5 +87,5 @@ export function createLogger(options: LoggerOptions) {
     },
   });
 
-  return {logger, httpLogger};
+  return {logger: loggerWithJob, httpLogger};
 }
