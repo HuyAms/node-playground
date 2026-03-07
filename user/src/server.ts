@@ -1,5 +1,6 @@
 import './instrumentation.js';
 import fs from 'node:fs';
+import { shutdownTracing } from '@node-playground/observability';
 import { createApp } from './app.js';
 import { config } from './config.js';
 import { logger } from './shared/logger.js';
@@ -21,7 +22,8 @@ const server = app.listen(config.port, () => {
 // Graceful shutdown — give in-flight requests time to finish
 function shutdown(signal: string): void {
   logger.info({ signal }, 'Shutdown signal received, closing server');
-  server.close(() => {
+  server.close(async () => {
+    await shutdownTracing();
     logger.info('Server closed');
     process.exit(0);
   });

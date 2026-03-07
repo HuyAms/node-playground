@@ -1,14 +1,25 @@
+import type {IncomingMessage} from 'node:http';
 import {NodeSDK} from '@opentelemetry/sdk-node';
 import {OTLPTraceExporter} from '@opentelemetry/exporter-trace-otlp-http';
 import {Resource} from '@opentelemetry/resources';
 import {ATTR_SERVICE_NAME} from '@opentelemetry/semantic-conventions';
+import {HttpInstrumentation} from '@opentelemetry/instrumentation-http';
 import {ExpressInstrumentation} from '@opentelemetry/instrumentation-express';
 import {FetchInstrumentation} from '@opentelemetry/instrumentation-fetch';
+
+const HEALTH_METRICS_PATHS = new Set(['/health', '/metrics']);
+
+function ignoreHealthAndMetrics(req: IncomingMessage): boolean {
+  const path = req.url?.split('?')[0] ?? '';
+  return HEALTH_METRICS_PATHS.has(path);
+}
 
 export interface InitTracingOptions {
   serviceName: string;
   endpoint?: string;
 }
+
+let sdk: NodeSDK | undefined;
 
 export function initTracing(options: InitTracingOptions): void {
   const endpoint =
@@ -23,13 +34,26 @@ export function initTracing(options: InitTracingOptions): void {
 
   const traceExporter = new OTLPTraceExporter({url});
 
-  const sdk = new NodeSDK({
+  sdk = new NodeSDK({
     resource,
     traceExporter,
-    // ExpressInstrumentation: auto-instruments Express to create spans for incoming HTTP requests (routes, middleware).
-    // FetchInstrumentation: auto-instruments the Fetch API to create spans for outgoing HTTP requests.
-    instrumentations: [new ExpressInstrumentation(), new FetchInstrumentation()],
+    // HttpInstrumentation: Node http/https layer (required base for Express).
+    // ExpressInstrumentation: Express routes/middleware. FetchInstrumentation: Node fetch() + W3C propagation.
+    instrumentations: [
+      new HttpInstrumentation({
+        ignoreIncomingRequestHook: ignoreHealthAndMetrics,
+      }),
+      new ExpressInstrumentation(),
+      new FetchInstrumentation(),
+    ],
   });
 
   sdk.start();
+}
+
+export async function shutdownTracing(): Promise<void> {
+  if (sdk) {
+    await sdk.shutdown();
+    sdk = undefined;
+  }
 }

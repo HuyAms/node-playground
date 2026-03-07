@@ -5,8 +5,8 @@ This document describes the OpenTelemetry (Otel) tracing setup for the node-play
 ## What was done
 
 - **Docker:** Added OpenTelemetry Collector and Grafana Tempo. The collector receives OTLP (HTTP/gRPC) from the Node services and forwards traces to Tempo. Tempo stores traces and exposes an HTTP API for Grafana.
-- **Observability package:** Added `initTracing()` in `@node-playground/observability` using the Otel Node SDK: OTLP HTTP exporter, Express instrumentation (incoming HTTP), and Fetch instrumentation (outgoing HTTP and W3C trace context propagation).
-- **Services:** Both **user** and **user-info** call `initTracing()` at startup via an `instrumentation` module imported first so the SDK is registered before Express loads.
+- **Observability package:** Added `initTracing()` in `@node-playground/observability` using the Otel Node SDK: OTLP HTTP exporter; HttpInstrumentation (Node http/https), Express instrumentation (incoming HTTP), and Fetch instrumentation (outgoing HTTP and W3C trace context propagation). `shutdownTracing()` flushes spans on process exit.
+- **Services:** Both **user** and **user-info** call `initTracing()` at startup via an `instrumentation` module imported first so the SDK is registered before Express loads. On graceful shutdown they call `shutdownTracing()` before exit.
 - **Grafana:** Tempo is provisioned as a datasource so you can search and view traces in Explore.
 
 ## Architecture
@@ -77,6 +77,16 @@ flowchart LR
 - **Otel Collector:** `otel-collector/otel-collector-config.yml` — OTLP receiver (4317 gRPC, 4318 HTTP), OTLP exporter to Tempo.
 - **Tempo:** `tempo/tempo-config.yml` — server port 3200, OTLP receivers (4317/4318), local storage.
 - **Grafana Tempo datasource:** `grafana/provisioning/datasources/tempo.yml` — URL `http://tempo:3200`.
+
+## Optional: strict instrumentation load order
+
+The SDK must run before Express (or any instrumented library) loads. The services achieve this by importing `instrumentation.js` first in `server.ts`. For production you can enforce this with Node’s `--require` so instrumentation runs before any other code:
+
+```bash
+NODE_OPTIONS='--require=./dist/instrumentation.js' node dist/server.js
+```
+
+Or add a script in each service’s `package.json`, e.g. `"start:otel": "node --require ./dist/instrumentation.js dist/server.js"` (and ensure instrumentation is built and does not depend on app code so it can be required first).
 
 ## Optional: trace ID in logs
 
