@@ -211,6 +211,29 @@ describe('POST /users', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Prometheus route labels
+// ---------------------------------------------------------------------------
+describe('Prometheus route labels', () => {
+  it('keeps mounted router prefixes in metrics', async () => {
+    const updateRes = await request(app)
+      .patch(`/users/${SEED_ID_2}`)
+      .send({ name: 'Metrics Check' });
+
+    expect(updateRes.status).toBe(200);
+
+    const metricsRes = await request(app).get('/metrics');
+
+    expect(metricsRes.status).toBe(200);
+    expect(metricsRes.text).toContain(
+      'http_requests_total{method="PATCH",route="/users/:id",status_code="200"} 1'
+    );
+    expect(metricsRes.text).not.toContain(
+      'http_requests_total{method="PATCH",route="/:id",status_code="200"}'
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
 // PATCH /users/:id
 // ---------------------------------------------------------------------------
 describe('PATCH /users/:id', () => {
