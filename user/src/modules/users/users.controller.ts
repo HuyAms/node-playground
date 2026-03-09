@@ -2,6 +2,18 @@ import { Request, Response, NextFunction } from 'express';
 import { UsersService } from './users.service.js';
 import { CreateUserInput, UpdateUserInput, PaginationQuery } from './users.schema.js';
 
+const FORCED_ERROR_MESSAGE = 'Forced post-processing error via ?error=true';
+
+function shouldForceError(req: Request): boolean {
+  const value = req.query.error;
+
+  if (Array.isArray(value)) {
+    return value.includes('true');
+  }
+
+  return value === 'true';
+}
+
 /**
  * Controllers are intentionally thin. Their only responsibilities:
  * - Extract validated data from req (already parsed by validate middleware)
@@ -30,6 +42,22 @@ export class UsersController {
       const { id } = req.params;
       const requestId = req.headers['x-request-id'] as string | undefined;
       const { user, profile } = await this.service.getUserWithProfile(id, requestId);
+      res.status(200).json({ data: { ...user, profile } });
+    } catch (err) {
+      next(err);
+    }
+  };
+
+  getUserInfo = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { id } = req.params;
+      const requestId = req.headers['x-request-id'] as string | undefined;
+      const { user, profile } = await this.service.getUserWithProfile(id, requestId);
+
+      if (shouldForceError(req)) {
+        throw new Error(FORCED_ERROR_MESSAGE);
+      }
+
       res.status(200).json({ data: { ...user, profile } });
     } catch (err) {
       next(err);

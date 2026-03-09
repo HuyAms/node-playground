@@ -47,10 +47,6 @@ export class UsersService {
     }
 
     cacheMissesTotal.inc({cache: CACHE_NAME});
-    // Simulate DB failure for testing error handling (realistic ~3% rate)
-    if (Math.random() < 0.03) {
-      throw new Error('user-service: Database connection error (simulated)');
-    }
     const user = await this.repo.findById(id);
 
     if (!user) {

@@ -87,6 +87,32 @@ describe('GET /users', () => {
   });
 });
 
+describe('route-local error trigger', () => {
+  it('returns 500 for /user/:id/info when ?error=true', async () => {
+    vi.mocked(getUserProfile).mockClear();
+
+    const res = await request(app).get(`/user/${SEED_ID_1}/info?error=true`);
+
+    expect(res.status).toBe(500);
+    expect(res.body.error.code).toBe('INTERNAL_SERVER_ERROR');
+    expect(getUserProfile).toHaveBeenCalledWith(SEED_ID_1, expect.any(String));
+  });
+
+  it('keeps /user/:id/info successful without ?error=true', async () => {
+    const res = await request(app).get(`/user/${SEED_ID_1}/info`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.id).toBe(SEED_ID_1);
+  });
+
+  it('does not force errors on unrelated routes', async () => {
+    const res = await request(app).get('/health?error=true');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({status: 'ok'});
+  });
+});
+
 // ---------------------------------------------------------------------------
 // GET /users/:id
 // ---------------------------------------------------------------------------

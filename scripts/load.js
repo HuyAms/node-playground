@@ -4,6 +4,7 @@ import { SharedArray } from 'k6/data';
 
 const BASE_URL = __ENV.K6_BASE_URL || 'http://localhost:3000';
 const DURATION = __ENV.DURATION || '999h'; // run until Ctrl+C by default
+const ERROR_RATE = Number(__ENV.ERROR_RATE || '0.05');
 
 // IDs from InMemoryUserRepository SEED_USERS (users.repository.ts)
 const userIds = new SharedArray('userIds', function () {
@@ -51,6 +52,19 @@ export const options = {
         { duration: '2m', target: 28 }, // spike
         { duration: '2m', target: 12 },
         { duration: DURATION, target: 12 },
+      ],
+    },
+
+    // Read-heavy joined route — GET /user/:id/info with ~5% forced 500s
+    get_user_info: {
+      executor: 'ramping-vus',
+      exec: 'getUserInfo',
+      stages: [
+        { duration: '2m', target: 20 },
+        { duration: '6m', target: 20 },
+        { duration: '2m', target: 45 }, // spike
+        { duration: '2m', target: 20 },
+        { duration: DURATION, target: 20 },
       ],
     },
 
@@ -119,6 +133,15 @@ export function getUserById() {
   const res = http.get(`${BASE_URL}/users/${id}`);
   check(res, { 'get_by_id ok': r => r.status === 200 || r.status === 404 });
   sleep(0.2 + Math.random() * 0.3); // 200–500ms think time
+}
+
+export function getUserInfo() {
+  const id = userIds[Math.floor(Math.random() * userIds.length)];
+  const shouldForceError = Math.random() < ERROR_RATE;
+  const suffix = shouldForceError ? '?error=true' : '';
+  const res = http.get(`${BASE_URL}/user/${id}/info${suffix}`);
+  check(res, { 'get_user_info ok': r => r.status === 200 || r.status === 500 });
+  sleep(0.2 + Math.random() * 0.3);
 }
 
 export function getUserByIdNotFound() {

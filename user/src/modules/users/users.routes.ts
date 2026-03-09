@@ -14,6 +14,7 @@ const service = new UsersService(userRepository);
 const controller = new UsersController(service);
 
 export const usersRouter = Router();
+export const userInfoRouter = Router();
 
 usersRouter.get('/', validate(paginationSchema, 'query'), controller.listUsers);
 usersRouter.get('/:id', validate(userIdParamSchema, 'params'), controller.getUserById);
@@ -25,3 +26,5 @@ usersRouter.patch(
   controller.updateUser
 );
 usersRouter.delete('/:id', validate(userIdParamSchema, 'params'), controller.deleteUser);
+
+userInfoRouter.get('/:id/info', validate(userIdParamSchema, 'params'), controller.getUserInfo);

@@ -17,7 +17,7 @@ k6 is a load testing CLI tool written in Go. It runs JavaScript test scripts but
 docker compose --profile load run --rm k6
 
 # Run for a fixed duration
-DURATION=20m docker compose --profile load run --rm k6
+DURATION=5m docker compose --profile load run --rm k6
 ```
 
 ### Option B — Local CLI
@@ -29,13 +29,16 @@ k6 run scripts/load.js
 
 # Fixed duration override
 DURATION=10m k6 run scripts/load.js
+
+# Force ~5% of /user/:id/info traffic to return 500
+ERROR_RATE=0.05 k6 run scripts/load.js
 ```
 
 `get_by_id` uses the same user IDs as the in-memory repo seed in `users.repository.ts` (IDs `1`–`10`). No seeding step required.
 
 ### Mid-popular profile
 
-The script is tuned to simulate a **mid-popular** app: ~60–100 sustained RPS baseline, ~150–200 RPS at peak (2–2.5× spike), read-heavy mix (~90:10 read:write), with a small share of 404s. Use it to stress caches, DB, and dashboards under realistic traffic.
+The script is tuned to simulate a **mid-popular** app: ~60–100 sustained RPS baseline, ~150–200 RPS at peak (2–2.5× spike), read-heavy mix (~90:10 read:write), with a small share of 404s and about 5% forced 500s on `GET /user/:id/info`. Use it to stress caches, DB, and dashboards under realistic traffic.
 
 ---
 
@@ -60,10 +63,10 @@ scenarios: {
 
 We use two executor types:
 
-| Executor | Behaviour |
-|---|---|
-| `ramping-vus` | VU count changes over time following `stages` — creates traffic waves |
-| `constant-vus` | Fixed VU count for a fixed duration — flat baseline |
+| Executor       | Behaviour                                                             |
+| -------------- | --------------------------------------------------------------------- |
+| `ramping-vus`  | VU count changes over time following `stages` — creates traffic waves |
+| `constant-vus` | Fixed VU count for a fixed duration — flat baseline                   |
 
 ### Stages
 
@@ -71,12 +74,12 @@ Stages define how VUs ramp up/down over time for `ramping-vus`:
 
 ```js
 stages: [
-  { duration: '2m', target: 25 }, // ramp to baseline VUs
-  { duration: '6m', target: 25 }, // hold baseline
-  { duration: '2m', target: 55 }, // spike (traffic surge)
-  { duration: '2m', target: 25 }, // ramp back down
-  { duration: DURATION, target: 25 }, // hold until stopped
-]
+  {duration: '2m', target: 25}, // ramp to baseline VUs
+  {duration: '6m', target: 25}, // hold baseline
+  {duration: '2m', target: 55}, // spike (traffic surge)
+  {duration: '2m', target: 25}, // ramp back down
+  {duration: DURATION, target: 25}, // hold until stopped
+];
 ```
 
 This creates visible waves in Grafana — you can see request rate rise and fall in real time.
@@ -102,15 +105,15 @@ Green = passing, red = failing in terminal output.
 
 ## Traffic scenario design
 
-| Scenario | VUs (baseline → spike) | Route | What it shows in Prometheus |
-|---|---|---|---|
-| `get_by_id` | 25→55 | `GET /users/:id` (existing IDs) | Highest volume in `topk()`, cache hit rate ratio |
-| `list_users` | 12→28 | `GET /users` | Second in `topk()`, always hits DB |
-| `get_user_with_profile` | 20→45 | `GET /users/:id/info` | Heavy read route |
-| `create_user` | 2→4 | `POST /users` | Low-volume writes, long think time |
-| `update_user` | 1→3 | `PATCH /users/:id` | Occasional updates |
-| `get_404` | 2→4 | `GET /users/:id` (non-existent IDs) | `route="unknown"`, `status_code="404"` — 404 rate in dashboards |
-| `health_probe` | 3 (constant) | `GET /health` | Background noise, flat baseline |
+| Scenario                | VUs (baseline → spike) | Route                               | What it shows in Prometheus                                     |
+| ----------------------- | ---------------------- | ----------------------------------- | --------------------------------------------------------------- |
+| `get_by_id`             | 25→55                  | `GET /users/:id` (existing IDs)     | Highest volume in `topk()`, cache hit rate ratio                |
+| `list_users`            | 12→28                  | `GET /users`                        | Second in `topk()`, always hits DB                              |
+| `get_user_info`         | 20→45                  | `GET /user/:id/info`                | Heavy read route, ~5% forced 500s with `?error=true`            |
+| `create_user`           | 2→4                    | `POST /users`                       | Low-volume writes, long think time                              |
+| `update_user`           | 1→3                    | `PATCH /users/:id`                  | Occasional updates                                              |
+| `get_404`               | 2→4                    | `GET /users/:id` (non-existent IDs) | `route="unknown"`, `status_code="404"` — 404 rate in dashboards |
+| `health_probe`          | 3 (constant)           | `GET /health`                       | Background noise, flat baseline                                 |
 
 ### Timeline
 

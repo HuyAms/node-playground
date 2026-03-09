@@ -284,7 +284,7 @@ Add features that make all metrics interesting and controllable.
 **New `/simulate` module (`src/modules/simulate/`):**
 
 - `GET /simulate/slow?ms=500` — artificial delay, makes P95 spike visibly
-- `GET /simulate/error?rate=0.5` — random HTTP 500s at given rate, used to trigger alerts
+- Append `?error=true` to `GET /user/:id/info` after normal request processing to force an HTTP 500, used to trigger alerts deterministically
 - `GET /simulate/cpu?duration=2000` — CPU loop, makes `nodejs_eventloop_lag_p99_seconds` spike
 
 Key PromQL (derived ratio metric):
@@ -314,7 +314,7 @@ curl "http://localhost:3000/simulate/slow?ms=800"
 # Then check P95 in Prometheus — should be near 0.8s
 
 # Simulate errors
-curl "http://localhost:3000/simulate/error?rate=1.0"  # always 500
+curl "http://localhost:3000/user/1/info?error=true"  # always 500
 ```
 
 In Prometheus UI: `cache_hits_total` and `cache_misses_total` both have values. Cache hit rate query returns a number between 0 and 1. After hitting `/simulate/slow?ms=800`, P95 visibly increases in the Grafana Time Series panel.
@@ -465,7 +465,7 @@ This is how production dashboards are built: instrument → record → visualize
 In Prometheus UI → **Status → Rules** — all three rules must show **State: ok** (not error).
 
 - `job:http_requests_total:rate5m` returns data
-- `job:http_request_errors:rate5m` returns data (may be 0 if no errors yet — trigger with `/simulate/error?rate=1.0`)
+- `job:http_request_errors:rate5m` returns data (may be 0 if no errors yet — trigger with `/user/1/info?error=true`)
 - `job:http_request_duration_p95:5m` matches raw `histogram_quantile()` output
 - Grafana panel using `job:http_request_duration_p95:5m` renders without "No data"
 
@@ -516,7 +516,7 @@ Create `prometheus/rules/alert_rules.yml`:
 Trigger intentionally:
 
 ```bash
-while true; do curl -s "http://localhost:3000/simulate/error?rate=0.8" > /dev/null; sleep 0.1; done
+while true; do curl -s "http://localhost:3000/user/1/info?error=true" > /dev/null; sleep 0.1; done
 ```
 
 Watch `http://localhost:9090/alerts` cycle: **INACTIVE → PENDING → FIRING**

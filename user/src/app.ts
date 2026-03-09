@@ -10,7 +10,7 @@ import { registry, httpRequestsTotal, httpRequestsInFlight, httpRequestDuration 
 import { httpLogger } from './shared/logger.js';
 import { requestId } from './shared/middleware/requestId.js';
 import { errorHandler } from './shared/middleware/errorHandler.js';
-import {usersRouter} from './modules/users/users.routes.js';
+import {usersRouter, userInfoRouter} from './modules/users/users.routes.js';
 import {simulateRouter} from './modules/simulate/simulate.routes.js';
 import {swaggerSpec} from './docs/swagger.js';
 
@@ -80,6 +80,7 @@ export function createApp(): express.Application {
   // ------------------------------------------------------------------
   // Feature routes
   // ------------------------------------------------------------------
+  app.use('/user', userInfoRouter);
   app.use('/users', usersRouter);
   app.use('/simulate', simulateRouter);
 

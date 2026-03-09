@@ -8,22 +8,30 @@ import {registry, httpRequestsTotal, httpRequestsInFlight, httpRequestDuration} 
 import {httpLogger} from './logger.js';
 import {requestId} from './middleware/requestId.js';
 import {errorHandler} from './middleware/errorHandler.js';
-import {AppError, NotFoundError} from './errors/index.js';
+import {NotFoundError} from './errors/index.js';
 import {getProfileById} from './data/seedProfiles.js';
 import {config} from './config.js';
 import {delay} from './utils/delay.js';
 
-async function fakeSlownessAndErrorMiddleware(
+const FORCED_ERROR_MESSAGE = 'Forced post-processing error via ?error=true';
+
+function shouldForceError(req: Request): boolean {
+  const value = req.query.error;
+
+  if (Array.isArray(value)) {
+    return value.includes('true');
+  }
+
+  return value === 'true';
+}
+
+async function fakeSlownessMiddleware(
   _req: Request,
   _res: Response,
   next: NextFunction
 ): Promise<void> {
   if (config.enableFakeSlowness) {
     await delay(300 + Math.random() * 50);
-  }
-  if (Math.random() < config.fakeErrorRate) {
-    next(new Error('user-info: DB connection failure'));
-    return;
   }
   next();
 }
@@ -48,12 +56,18 @@ export function createApp(): express.Application {
     res.status(200).json({status: 'ok'});
   });
 
-  app.get('/user/:id/profile', fakeSlownessAndErrorMiddleware, (req, res, next) => {
+  app.get('/user/:id/profile', fakeSlownessMiddleware, (req, res, next) => {
     const profile = getProfileById(req.params.id);
     if (!profile) {
       next(new NotFoundError('User profile', req.params.id));
       return;
     }
+
+    if (shouldForceError(req)) {
+      next(new Error(FORCED_ERROR_MESSAGE));
+      return;
+    }
+
     res.status(200).json(profile);
   });
 
