@@ -5,7 +5,6 @@ import {Resource} from '@opentelemetry/resources';
 import {ATTR_SERVICE_NAME} from '@opentelemetry/semantic-conventions';
 import {HttpInstrumentation} from '@opentelemetry/instrumentation-http';
 import {ExpressInstrumentation} from '@opentelemetry/instrumentation-express';
-import {FetchInstrumentation} from '@opentelemetry/instrumentation-fetch';
 
 const HEALTH_METRICS_PATHS = new Set(['/health', '/metrics']);
 
@@ -38,13 +37,12 @@ export function initTracing(options: InitTracingOptions): void {
     resource,
     traceExporter,
     // HttpInstrumentation: Node http/https layer (required base for Express).
-    // ExpressInstrumentation: Express routes/middleware. FetchInstrumentation: Node fetch() + W3C propagation.
+    // ExpressInstrumentation: Express routes/middleware.
     instrumentations: [
       new HttpInstrumentation({
         ignoreIncomingRequestHook: ignoreHealthAndMetrics,
       }),
       new ExpressInstrumentation(),
-      new FetchInstrumentation(),
     ],
   });
 
