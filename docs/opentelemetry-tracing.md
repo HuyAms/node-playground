@@ -5,7 +5,7 @@ This document describes the OpenTelemetry (Otel) tracing setup for the node-play
 ## What was done
 
 - **Docker:** Added OpenTelemetry Collector and Grafana Tempo. The collector receives OTLP (HTTP/gRPC) from the Node services and forwards traces to Tempo. Tempo stores traces and exposes an HTTP API for Grafana.
-- **Observability package:** Added `initTracing()` in `@node-playground/observability` using the Otel Node SDK: OTLP HTTP exporter; HttpInstrumentation (Node http/https), Express instrumentation (incoming HTTP), and Fetch instrumentation (outgoing HTTP and W3C trace context propagation). `shutdownTracing()` flushes spans on process exit.
+- **Observability package:** Added `initTracing()` in `@node-playground/observability` using the Otel Node SDK: OTLP HTTP exporter; HttpInstrumentation (Node http/https), Express instrumentation (incoming HTTP), and Undici instrumentation (Node `fetch()` / undici: outgoing HTTP and W3C trace context propagation). Incoming and outgoing requests to `/health` and `/metrics` are not traced. `shutdownTracing()` flushes spans on process exit.
 - **Services:** Both **user** and **user-info** call `initTracing()` at startup via an `instrumentation` module imported first so the SDK is registered before Express loads. On graceful shutdown they call `shutdownTracing()` before exit.
 - **Grafana:** Tempo is provisioned as a datasource so you can search and view traces in Explore.
 
@@ -42,7 +42,7 @@ flowchart LR
 
 - **user** and **user-info** send OTLP spans to the collector (`OTEL_EXPORTER_OTLP_ENDPOINT`).
 - The collector forwards traces to Tempo (OTLP gRPC).
-- Outbound `fetch()` from user to user-info is instrumented and injects W3C Trace Context headers, so one logical request produces a single trace with spans from both services.
+- Outbound `fetch()` from user to user-info is instrumented via UndiciInstrumentation and injects W3C Trace Context headers, so one logical request produces a single trace with spans from both services.
 
 ## How to run
 
@@ -63,7 +63,7 @@ flowchart LR
 
 1. Open Grafana (default http://localhost:3001, admin/admin).
 2. Go to **Explore** and select the **Tempo** datasource.
-3. Run a search (e.g. time range + optional filters). Open a trace to see spans; with Phase 2 (Fetch instrumentation) you should see one trace containing both **user** and **user-info** spans for a single request.
+3. Run a search (e.g. time range + optional filters). Open a trace to see spans; you should see one trace containing both **user** and **user-info** spans for a single request.
 
 ## Config reference
 
