@@ -4,7 +4,7 @@
   "description": "Enterprise-grade Node.js REST API",
   "main": "dist/server.js",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch --import ./src/instrumentation.ts src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "vitest run",
