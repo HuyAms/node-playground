@@ -1,4 +1,4 @@
-import { initTracing } from '@node-playground/observability';
+import {initTracing} from '@node-playground/observability/tracing';
 
 initTracing({
   serviceName: 'user',

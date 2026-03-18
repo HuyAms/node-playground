@@ -4,6 +4,10 @@
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js",
+    "./tracing": "./dist/tracing.js"
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run"
