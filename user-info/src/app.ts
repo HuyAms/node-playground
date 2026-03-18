@@ -2,6 +2,7 @@ import type {Request, Response, NextFunction} from 'express';
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
+import {trace, SpanStatusCode} from '@opentelemetry/api';
 
 import {httpMetrics} from '@node-playground/observability';
 import {registry, httpRequestsTotal, httpRequestsInFlight, httpRequestDuration} from './metrics.js';
@@ -13,6 +14,7 @@ import {getProfileById} from './data/seedProfiles.js';
 import {config} from './config.js';
 import {delay} from './utils/delay.js';
 
+const tracer = trace.getTracer('user-info', '1.0');
 const FORCED_ERROR_MESSAGE = 'Forced post-processing error via ?error=true';
 
 function shouldForceError(req: Request): boolean {
@@ -57,18 +59,35 @@ export function createApp(): express.Application {
   });
 
   app.get('/user/:id/profile', fakeSlownessMiddleware, (req, res, next) => {
-    const profile = getProfileById(req.params.id);
-    if (!profile) {
-      next(new NotFoundError('User profile', req.params.id));
-      return;
-    }
+    const userId = req.params.id;
+    tracer.startActiveSpan(
+      'profile.getById',
+      {attributes: {'user.id': userId}},
+      (span) => {
+        try {
+          const profile = getProfileById(userId);
+          if (!profile) {
+            const err = new NotFoundError('User profile', userId);
+            span.recordException(err);
+            span.setStatus({code: SpanStatusCode.ERROR});
+            next(err);
+            return;
+          }
 
-    if (shouldForceError(req)) {
-      next(new Error(FORCED_ERROR_MESSAGE));
-      return;
-    }
+          if (shouldForceError(req)) {
+            const err = new Error(FORCED_ERROR_MESSAGE);
+            span.recordException(err);
+            span.setStatus({code: SpanStatusCode.ERROR});
+            next(err);
+            return;
+          }
 
-    res.status(200).json(profile);
+          res.status(200).json(profile);
+        } finally {
+          span.end();
+        }
+      },
+    );
   });
 
   app.use((_req, res) => {
