@@ -1,3 +1,5 @@
+import {delay} from '../utils/delay.js';
+
 export interface UserProfile {
   userId: string;
   displayName: string;
@@ -22,6 +24,7 @@ const profileByUserId = new Map<string, UserProfile>(
   SEED_PROFILES.map((p) => [p.userId, p]),
 );
 
-export function getProfileById(userId: string): UserProfile | undefined {
+export async function getProfileById(userId: string): Promise<UserProfile | undefined> {
+  await delay(300 + Math.random() * 50);
   return profileByUserId.get(userId);
 }

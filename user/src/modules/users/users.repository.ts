@@ -1,7 +1,5 @@
 import { User, CreateUserInput, UpdateUserInput } from './users.schema.js';
-import { PaginationQuery, toOffset } from '../../shared/types/pagination.js';
-import { config } from '../../config.js';
-import { delay } from '../../utils/delay.js';
+import { PaginationQuery } from '../../shared/types/pagination.js';
 
 export interface UserRepository {
   findAll(pagination: PaginationQuery): Promise<{ users: User[]; total: number }>;
@@ -15,7 +13,7 @@ export interface UserRepository {
 // ---------------------------------------------------------------------------
 // Seed data — covers all roles and provides enough records for pagination tests
 // ---------------------------------------------------------------------------
-const SEED_USERS: User[] = [
+export const SEED_USERS: User[] = [
   {
     id: '1',
     name: 'Alice Nguyen',
@@ -98,66 +96,3 @@ const SEED_USERS: User[] = [
   },
 ];
 
-// ---------------------------------------------------------------------------
-// In-memory implementation
-// ---------------------------------------------------------------------------
-export class InMemoryUserRepository implements UserRepository {
-  // Shallow-copy seed so tests that reset module state start clean
-  private store: User[] = SEED_USERS.map((u) => ({ ...u }));
-  private nextId = SEED_USERS.length + 1;
-
-  async findAll(pagination: PaginationQuery): Promise<{ users: User[]; total: number }> {
-    const total = this.store.length;
-    const offset = toOffset(pagination.page, pagination.limit);
-    const users = this.store.slice(offset, offset + pagination.limit);
-    return { users, total };
-  }
-
-  async findById(id: string): Promise<User | null> {
-    if (config.enableFakeSlowness) {
-      await delay(50 + Math.random() * 100);
-    }
-    return this.store.find((u) => u.id === id) ?? null;
-  }
-
-  async findByEmail(email: string): Promise<User | null> {
-    return this.store.find((u) => u.email === email) ?? null;
-  }
-
-  async create(_id: string, input: CreateUserInput, now: string): Promise<User> {
-    const user: User = {
-      id: String(this.nextId++),
-      name: input.name,
-      email: input.email,
-      role: input.role,
-      createdAt: now,
-      updatedAt: now,
-    };
-    this.store.push(user);
-    return user;
-  }
-
-  async update(id: string, input: UpdateUserInput, updatedAt: string): Promise<User | null> {
-    const index = this.store.findIndex((u) => u.id === id);
-    if (index === -1) return null;
-
-    const existing = this.store[index];
-    const updated: User = {
-      ...existing,
-      ...(input.name !== undefined && { name: input.name }),
-      ...(input.email !== undefined && { email: input.email }),
-      ...(input.role !== undefined && { role: input.role }),
-      updatedAt,
-    };
-    this.store[index] = updated;
-    return updated;
-  }
-
-  async delete(id: string): Promise<boolean> {
-    const before = this.store.length;
-    this.store = this.store.filter((u) => u.id !== id);
-    return this.store.length < before;
-  }
-}
-
-export const userRepository = new InMemoryUserRepository();

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import express from 'express';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
-import { InMemoryUserRepository } from '../../src/modules/users/users.repository.js';
+import { SqliteUserRepository } from '../../src/modules/users/sqlite.repository.js';
 import { UsersService } from '../../src/modules/users/users.service.js';
 import { UsersController } from '../../src/modules/users/users.controller.js';
 import { errorHandler } from '../../src/shared/middleware/errorHandler.js';
@@ -17,7 +17,8 @@ vi.mock('../../src/shared/userInfoClient.js', () => ({
   }),
 }));
 
-const app = createApp();
+const userRepository = new SqliteUserRepository(':memory:');
+const app = createApp(userRepository);
 
 // Seed IDs we can rely on across all tests (match repository seed)
 const SEED_ID_1 = '1'; // Alice Nguyen / admin
@@ -334,7 +335,7 @@ describe('DELETE /users/:id', () => {
 // ---------------------------------------------------------------------------
 describe('Simulated repository failure', () => {
   it('returns 500 when the repository throws an unexpected error', async () => {
-    const brokenRepo = new InMemoryUserRepository();
+    const brokenRepo = new SqliteUserRepository(':memory:');
     vi.spyOn(brokenRepo, 'findAll').mockRejectedValueOnce(new Error('Storage exploded'));
 
     const brokenService = new UsersService(brokenRepo);

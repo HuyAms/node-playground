@@ -3,6 +3,7 @@ import {OTLPTraceExporter} from '@opentelemetry/exporter-trace-otlp-http';
 import {Resource} from '@opentelemetry/resources';
 import {ATTR_SERVICE_NAME} from '@opentelemetry/semantic-conventions';
 import {getNodeAutoInstrumentations} from '@opentelemetry/auto-instrumentations-node';
+import {BetterSqlite3Instrumentation} from 'opentelemetry-plugin-better-sqlite3';
 
 export interface InitTracingOptions {
   serviceName: string;
@@ -39,6 +40,7 @@ export function initTracing(options: InitTracingOptions): void {
           },
         },
       }),
+      new BetterSqlite3Instrumentation(),
     ],
   });
 

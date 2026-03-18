@@ -37,6 +37,7 @@ export const config = {
   },
   corsOrigin: requireEnv('CORS_ORIGIN', '*'),
   userInfoServiceUrl: process.env.USER_INFO_SERVICE_URL ?? 'http://localhost:3002',
+  databasePath: process.env.DATABASE_PATH ?? './data/users.db',
 } as const;
 
 export type Config = typeof config;

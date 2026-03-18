@@ -13,9 +13,11 @@ services:
       - USER_INFO_SERVICE_URL=http://user-info:3000
       - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318
       - OTEL_SERVICE_NAME=user
+      - DATABASE_PATH=/app/user/data/users.db
     volumes:
       - ./user/src:/app/user/src
       - ./user/logs:/app/user/logs
+      - ./user/data:/app/user/data
     depends_on:
       - loki
       - user-info

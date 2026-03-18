@@ -6,7 +6,7 @@ const BASE_URL = __ENV.K6_BASE_URL || 'http://localhost:3000';
 const DURATION = __ENV.DURATION || '999h'; // run until Ctrl+C by default
 const ERROR_RATE = Number(__ENV.ERROR_RATE || '0.05');
 
-// IDs from InMemoryUserRepository SEED_USERS (users.repository.ts)
+// IDs from SqliteUserRepository SEED_USERS (users.repository.ts)
 const userIds = new SharedArray('userIds', function () {
   return ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10'];
 });

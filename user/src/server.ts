@@ -4,13 +4,15 @@ import { shutdownTracing } from '@node-playground/observability';
 import { createApp } from './app.js';
 import { config } from './config.js';
 import { logger } from './shared/logger.js';
+import { SqliteUserRepository } from './modules/users/sqlite.repository.js';
 
 if (config.logFile) {
   fs.mkdirSync('logs', { recursive: true });
   fs.writeFileSync(config.logFile, '');
 }
 
-const app = createApp();
+const userRepository = new SqliteUserRepository(config.databasePath);
+const app = createApp(userRepository);
 
 const server = app.listen(config.port, () => {
   logger.info(
@@ -23,6 +25,7 @@ const server = app.listen(config.port, () => {
 function shutdown(signal: string): void {
   logger.info({ signal }, 'Shutdown signal received, closing server');
   server.close(async () => {
+    userRepository.close();
     await shutdownTracing();
     logger.info('Server closed');
     process.exit(0);

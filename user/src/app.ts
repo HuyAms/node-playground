@@ -4,18 +4,20 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
 
+import type { UserRepository } from './modules/users/users.repository.js';
+import { createUsersRoutes } from './modules/users/users.routes.js';
 import { httpMetrics } from '@node-playground/observability';
 import { config } from './config.js';
 import { registry, httpRequestsTotal, httpRequestsInFlight, httpRequestDuration } from './shared/metrics.js';
 import { httpLogger } from './shared/logger.js';
 import { requestId } from './shared/middleware/requestId.js';
 import { errorHandler } from './shared/middleware/errorHandler.js';
-import {usersRouter, userInfoRouter} from './modules/users/users.routes.js';
 import {simulateRouter} from './modules/simulate/simulate.routes.js';
 import {swaggerSpec} from './docs/swagger.js';
 
-export function createApp(): express.Application {
+export function createApp(userRepository: UserRepository): express.Application {
   const app = express();
+  const {usersRouter, userInfoRouter} = createUsersRoutes(userRepository);
 
   // ------------------------------------------------------------------
   // Security middleware

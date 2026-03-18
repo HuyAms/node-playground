@@ -11,8 +11,6 @@ import {requestId} from './middleware/requestId.js';
 import {errorHandler} from './middleware/errorHandler.js';
 import {NotFoundError} from './errors/index.js';
 import {getProfileById} from './data/seedProfiles.js';
-import {config} from './config.js';
-import {delay} from './utils/delay.js';
 
 const tracer = trace.getTracer('user-info', '1.0');
 const FORCED_ERROR_MESSAGE = 'Forced post-processing error via ?error=true';
@@ -25,17 +23,6 @@ function shouldForceError(req: Request): boolean {
   }
 
   return value === 'true';
-}
-
-async function fakeSlownessMiddleware(
-  _req: Request,
-  _res: Response,
-  next: NextFunction
-): Promise<void> {
-  if (config.enableFakeSlowness) {
-    await delay(300 + Math.random() * 50);
-  }
-  next();
 }
 
 export function createApp(): express.Application {
@@ -58,14 +45,14 @@ export function createApp(): express.Application {
     res.status(200).json({status: 'ok'});
   });
 
-  app.get('/user/:id/profile', fakeSlownessMiddleware, (req, res, next) => {
+  app.get('/user/:id/profile', async (req, res, next) => {
     const userId = req.params.id;
     tracer.startActiveSpan(
       'get profile',
       {attributes: {'user.id': userId}},
-      (span) => {
+      async (span) => {
         try {
-          const profile = getProfileById(userId);
+          const profile = await getProfileById(userId);
           if (!profile) {
             const err = new NotFoundError('User profile', userId);
             span.recordException(err);
