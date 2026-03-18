@@ -43,7 +43,7 @@ export function createLogger(options: LoggerOptions) {
         options: {
           host: lokiUrl,
           labels: {job},
-          propsToLabels: ['level', 'req.method', 'res.statusCode'],
+          propsToLabels: ['level', 'req.method', 'res.statusCode', 'traceId'],
           batching: {interval: 1},
           silenceErrors: false,
         },

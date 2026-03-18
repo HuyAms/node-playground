@@ -27,7 +27,13 @@ export function initTracing(options: InitTracingOptions): void {
   sdk = new NodeSDK({
     resource,
     traceExporter,
-    instrumentations: [getNodeAutoInstrumentations()],
+    instrumentations: [
+      ...getNodeAutoInstrumentations({
+        '@opentelemetry/instrumentation-pino': {
+          disableLogSending: true,
+        },
+      }),
+    ],
   });
 
   sdk.start();
