@@ -27,7 +27,7 @@ const env = requireEnv('NODE_ENV', 'development') as 'development' | 'production
 export const config = {
   env,
   port: parseIntEnv('PORT', 3000),
-  logLevel: requireEnv('LOG_LEVEL', 'info'),
+  logLevel: requireEnv('LOG_LEVEL', env === 'development' ? 'debug' : 'info'),
   logFile: env === 'development' ? 'logs/app.log' : undefined,
   lokiUrl: process.env.LOKI_URL ?? undefined,
   enableFakeSlowness: parseBoolEnv('ENABLE_FAKE_SLOWNESS', env !== 'test'),
