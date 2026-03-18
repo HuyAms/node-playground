@@ -18,7 +18,7 @@ export async function getUserProfile(
   const url = `${baseUrl}${path}`;
 
   return tracer.startActiveSpan(
-    'userInfo.fetch',
+    'fetch profile',
     { attributes: { 'user.id': userId, 'http.target': path } },
     async (span) => {
       try {

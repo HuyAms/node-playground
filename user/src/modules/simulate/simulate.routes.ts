@@ -9,7 +9,7 @@ simulateRouter.get('/cpu', (req: Request, res: Response) => {
   const duration = Math.min(Number(req.query['duration']) || 1000, 10_000);
 
   tracer.startActiveSpan(
-    'simulate.cpu',
+    'simulate cpu',
     { attributes: { duration_ms: duration } },
     (span) => {
       try {

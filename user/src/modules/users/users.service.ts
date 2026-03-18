@@ -28,7 +28,7 @@ export class UsersService {
 
   async listUsers(pagination: PaginationQuery, requestId?: string): Promise<PaginatedResult<User>> {
     return tracer.startActiveSpan(
-      'users.list',
+      'list users',
       {attributes: {page: pagination.page, limit: pagination.limit}},
       async (span) => {
         try {
@@ -55,7 +55,7 @@ export class UsersService {
 
   async getUserById(id: string, requestId?: string): Promise<User> {
     return tracer.startActiveSpan(
-      'users.getById',
+      'get user',
       {attributes: {'user.id': id}},
       async (span) => {
         try {
@@ -99,7 +99,7 @@ export class UsersService {
     requestId?: string
   ): Promise<{user: User; profile: UserProfilePayload}> {
     return tracer.startActiveSpan(
-      'users.getWithProfile',
+      'get user profile',
       {attributes: {'user.id': id}},
       async (span) => {
         try {
@@ -119,7 +119,7 @@ export class UsersService {
 
   async createUser(input: CreateUserInput, requestId?: string): Promise<User> {
     return tracer.startActiveSpan(
-      'users.create',
+      'create user',
       {attributes: {'user.email': input.email, 'user.role': input.role}},
       async (span) => {
         try {
@@ -154,7 +154,7 @@ export class UsersService {
 
   async updateUser(id: string, input: UpdateUserInput, requestId?: string): Promise<User> {
     return tracer.startActiveSpan(
-      'users.update',
+      'update user',
       {attributes: {'user.id': id}},
       async (span) => {
         try {
@@ -196,7 +196,7 @@ export class UsersService {
 
   async deleteUser(id: string, requestId?: string): Promise<void> {
     return tracer.startActiveSpan(
-      'users.delete',
+      'delete user',
       {attributes: {'user.id': id}},
       async (span) => {
         try {

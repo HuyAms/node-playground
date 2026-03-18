@@ -61,7 +61,7 @@ export function createApp(): express.Application {
   app.get('/user/:id/profile', fakeSlownessMiddleware, (req, res, next) => {
     const userId = req.params.id;
     tracer.startActiveSpan(
-      'profile.getById',
+      'get profile',
       {attributes: {'user.id': userId}},
       (span) => {
         try {
