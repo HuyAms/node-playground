@@ -32,6 +32,12 @@ export function initTracing(options: InitTracingOptions): void {
         '@opentelemetry/instrumentation-pino': {
           disableLogSending: true,
         },
+        '@opentelemetry/instrumentation-http': {
+          ignoreIncomingRequestHook: (req) => {
+            const path = req.url?.split('?')[0] ?? '';
+            return path === '/health' || path === '/metrics';
+          },
+        },
       }),
     ],
   });
