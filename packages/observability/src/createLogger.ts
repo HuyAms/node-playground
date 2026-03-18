@@ -54,19 +54,17 @@ export function createLogger(options: LoggerOptions) {
   const logger = pino(
     {
       level: logLevel,
+      name: job,
       formatters: {
         level: label => ({level: label}),
-        bindings: () => ({}),
       },
       redact: {paths: REDACT_PATHS, censor: CENSOR},
     },
     pino.multistream(streams)
   );
 
-  const loggerWithJob = logger.child({job});
-
   const httpLogger = pinoHttp({
-    logger: loggerWithJob,
+    logger: logger,
     genReqId: req => (req.headers['x-request-id'] as string) ?? crypto.randomUUID(),
     customProps: req => ({
       requestId: req.headers['x-request-id'],
@@ -87,5 +85,5 @@ export function createLogger(options: LoggerOptions) {
     },
   });
 
-  return {logger: loggerWithJob, httpLogger};
+  return {logger, httpLogger};
 }
