@@ -17,110 +17,100 @@ const notFoundIds = new SharedArray('notFoundIds', function () {
 });
 
 // ---------------------------------------------------------------------------
-// Traffic shape — ramping VUs creates visible waves in Grafana:
+// Medium ecommerce profile — traffic mix and shape:
 //
-//   0-2m:   ramp up to baseline (normal business hours start)
-//   2-8m:   steady baseline     (normal load)
-//   8-10m:  traffic spike       (sale / viral event)
-//   10-12m: ramp back down      (peak subsides)
-//   12m+:   low steady state    (off-peak / night)
+//   Browse (catalog/list) ~55% | PDP (product detail) ~25–30% | PDP rich ~10–12%
+//   404 (broken link) ~1–2%   | Registration ~1–2%           | Profile update <1% | Health constant
 //
-// Each scenario has its own ramp so topk() clearly shows winner routes.
+//   Stages: 0–2m ramp → 2–8m baseline → 8–10m spike (sale) → 10–12m recover → 12m+ steady
 // ---------------------------------------------------------------------------
 export const options = {
   scenarios: {
-    // Highest volume — GET /users/:id with cache hits (read-heavy like production)
-    get_by_id: {
-      executor: 'ramping-vus',
-      exec: 'getUserById',
-      stages: [
-        { duration: '2m', target: 25 }, // ramp up
-        { duration: '6m', target: 25 }, // steady baseline
-        { duration: '2m', target: 55 }, // spike
-        { duration: '2m', target: 25 }, // recover
-        { duration: DURATION, target: 25 },
-      ],
-    },
-
-    // Second busiest — list users (no cache, always hits DB)
-    list_users: {
+    browse_catalog: {
       executor: 'ramping-vus',
       exec: 'listUsers',
       stages: [
+        { duration: '2m', target: 55 },
+        { duration: '6m', target: 55 },
+        { duration: '2m', target: 120 }, // spike
+        { duration: '2m', target: 55 },
+        { duration: DURATION, target: 55 },
+      ],
+    },
+
+    pdp: {
+      executor: 'ramping-vus',
+      exec: 'getUserById',
+      stages: [
+        { duration: '2m', target: 28 },
+        { duration: '6m', target: 28 },
+        { duration: '2m', target: 60 },
+        { duration: '2m', target: 28 },
+        { duration: DURATION, target: 28 },
+      ],
+    },
+
+    pdp_rich: {
+      executor: 'ramping-vus',
+      exec: 'getUserInfo',
+      stages: [
         { duration: '2m', target: 12 },
         { duration: '6m', target: 12 },
-        { duration: '2m', target: 28 }, // spike
+        { duration: '2m', target: 28 },
         { duration: '2m', target: 12 },
         { duration: DURATION, target: 12 },
       ],
     },
 
-    // Read-heavy joined route — GET /user/:id/info with ~5% forced 500s
-    get_user_info: {
+    broken_link: {
       executor: 'ramping-vus',
-      exec: 'getUserInfo',
-      stages: [
-        { duration: '2m', target: 20 },
-        { duration: '6m', target: 20 },
-        { duration: '2m', target: 45 }, // spike
-        { duration: '2m', target: 20 },
-        { duration: DURATION, target: 20 },
-      ],
-    },
-
-    // Low volume writes — creates new users so get_by_id has fresh IDs too
-    create_user: {
-      executor: 'ramping-vus',
-      exec: 'createUser',
+      exec: 'getUserByIdNotFound',
       stages: [
         { duration: '2m', target: 2 },
         { duration: '6m', target: 2 },
-        { duration: '2m', target: 4 }, // spike
+        { duration: '2m', target: 5 },
         { duration: '2m', target: 2 },
         { duration: DURATION, target: 2 },
       ],
     },
 
-    // Low volume updates — PATCH /users/:id (real-world mid-popular mix)
-    update_user: {
+    registration: {
+      executor: 'ramping-vus',
+      exec: 'createUser',
+      stages: [
+        { duration: '2m', target: 2 },
+        { duration: '6m', target: 2 },
+        { duration: '2m', target: 5 },
+        { duration: '2m', target: 2 },
+        { duration: DURATION, target: 2 },
+      ],
+    },
+
+    profile_update: {
       executor: 'ramping-vus',
       exec: 'updateUser',
       stages: [
         { duration: '2m', target: 1 },
         { duration: '6m', target: 1 },
-        { duration: '2m', target: 3 }, // spike
+        { duration: '2m', target: 3 },
         { duration: '2m', target: 1 },
         { duration: DURATION, target: 1 },
       ],
     },
 
-    // Background noise — health checks, like a load balancer probe
     health_probe: {
       executor: 'constant-vus',
       exec: 'healthCheck',
       vus: 3,
       duration: DURATION,
     },
-
-    // 404s — GET /users/:id with non-existent IDs (~1–2% of GET traffic)
-    get_404: {
-      executor: 'ramping-vus',
-      exec: 'getUserByIdNotFound',
-      stages: [
-        { duration: '2m', target: 2 },
-        { duration: '6m', target: 2 },
-        { duration: '2m', target: 4 }, // spike
-        { duration: '2m', target: 2 },
-        { duration: DURATION, target: 2 },
-      ],
-    },
   },
 
   thresholds: {
-    // These surface in k6 terminal output — green = passing, red = failing
-    http_req_duration:                    ['p(95)<500'],  // P95 under 500ms
-    'http_req_duration{scenario:get_by_id}': ['p(95)<100'],  // cache hits should be fast
-    http_req_failed:                      ['rate<0.15'],  // less than 15% errors overall
+    http_req_duration: ['p(95)<500'],
+    'http_req_duration{scenario:pdp}': ['p(95)<100'],
+    'http_req_duration{scenario:browse_catalog}': ['p(95)<300'],
+    http_req_failed: ['rate<0.15'],
   },
 };
 
@@ -132,7 +122,7 @@ export function getUserById() {
   const id = userIds[Math.floor(Math.random() * userIds.length)];
   const res = http.get(`${BASE_URL}/users/${id}`);
   check(res, { 'get_by_id ok': r => r.status === 200 || r.status === 404 });
-  sleep(0.2 + Math.random() * 0.3); // 200–500ms think time
+  sleep(0.4 + Math.random() * 0.8); // 0.4–1.2s PDP think time
 }
 
 export function getUserInfo() {
@@ -141,21 +131,21 @@ export function getUserInfo() {
   const suffix = shouldForceError ? '?error=true' : '';
   const res = http.get(`${BASE_URL}/user/${id}/info${suffix}`);
   check(res, { 'get_user_info ok': r => r.status === 200 || r.status === 500 });
-  sleep(0.2 + Math.random() * 0.3);
+  sleep(0.4 + Math.random() * 0.8); // 0.4–1.2s PDP rich think time
 }
 
 export function getUserByIdNotFound() {
   const id = notFoundIds[Math.floor(Math.random() * notFoundIds.length)];
   const res = http.get(`${BASE_URL}/users/${id}`);
   check(res, { 'get_404 ok': r => r.status === 404 });
-  sleep(0.2 + Math.random() * 0.3);
+  sleep(0.2 + Math.random() * 0.3); // quick bounce
 }
 
 export function listUsers() {
   const page = Math.ceil(Math.random() * 3); // pages 1-3
   const res = http.get(`${BASE_URL}/users?page=${page}&limit=10`);
   check(res, { 'list ok': r => r.status === 200 });
-  sleep(0.8 + Math.random() * 0.7); // 800ms–1.5s browsing
+  sleep(1.5 + Math.random() * 2.5); // 1.5–4s browse (catalog/list)
 }
 
 export function createUser() {
@@ -166,7 +156,7 @@ export function createUser() {
     { headers: { 'Content-Type': 'application/json' } },
   );
   check(res, { 'create ok': r => r.status === 201 });
-  sleep(3 + Math.random() * 2); // 3–5s between writes
+  sleep(8 + Math.random() * 7); // 8–15s between sign-ups
 }
 
 export function updateUser() {
@@ -178,7 +168,7 @@ export function updateUser() {
     { headers: { 'Content-Type': 'application/json' } },
   );
   check(res, { 'update ok': r => r.status === 200 });
-  sleep(2 + Math.random() * 2); // 2–4s between updates
+  sleep(15 + Math.random() * 30); // 15–45s between profile edits
 }
 
 export function healthCheck() {

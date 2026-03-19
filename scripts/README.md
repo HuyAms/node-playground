@@ -34,11 +34,11 @@ DURATION=10m k6 run scripts/load.js
 ERROR_RATE=0.05 k6 run scripts/load.js
 ```
 
-`get_by_id` uses the same user IDs as the in-memory repo seed in `users.repository.ts` (IDs `1`–`10`). No seeding step required.
+`pdp` (product detail) uses the same user IDs as the in-memory repo seed in `users.repository.ts` (IDs `1`–`10`). No seeding step required.
 
-### Mid-popular profile
+### Medium ecommerce profile
 
-The script is tuned to simulate a **mid-popular** app: ~60–100 sustained RPS baseline, ~150–200 RPS at peak (2–2.5× spike), read-heavy mix (~90:10 read:write), with a small share of 404s and about 5% forced 500s on `GET /user/:id/info`. Use it to stress caches, DB, and dashboards under realistic traffic.
+The script simulates a **medium-size ecommerce** traffic mix: browse-heavy (~55% catalog/list), product-detail and PDP-rich views (~35% combined), rare writes (registration ~1–2%, profile update &lt;1%), a small share of 404s (broken links), and a ~2× traffic spike for sale events. Think times are tuned for ecommerce: longer between catalog pages (1.5–4s), shorter on PDP (0.4–1.2s), and long gaps between sign-ups (8–15s) and profile edits (15–45s). Use it to stress caches, DB, and RED dashboards under realistic ecommerce-style load.
 
 ---
 
@@ -46,7 +46,7 @@ The script is tuned to simulate a **mid-popular** app: ~60–100 sustained RPS b
 
 ### Virtual Users (VUs)
 
-A VU is a simulated user that loops through a function continuously. 25 VUs on `getUserById` means 25 concurrent users each calling `GET /users/:id` in a loop with a short think time between requests.
+A VU is a simulated user that loops through a function continuously. 55 VUs on `listUsers` (browse_catalog) means 55 concurrent users each calling `GET /users` in a loop with a browse think time (1.5–4s) between requests.
 
 ### Scenarios
 
@@ -54,8 +54,8 @@ Each scenario runs one `exec` function with its own VU count and ramp shape, ind
 
 ```js
 scenarios: {
-  get_by_id: { executor: 'ramping-vus', exec: 'getUserById', stages: [...] },
-  list_users: { executor: 'ramping-vus', exec: 'listUsers',  stages: [...] },
+  browse_catalog: { executor: 'ramping-vus', exec: 'listUsers', stages: [...] },
+  pdp:            { executor: 'ramping-vus', exec: 'getUserById', stages: [...] },
 }
 ```
 
@@ -74,11 +74,11 @@ Stages define how VUs ramp up/down over time for `ramping-vus`:
 
 ```js
 stages: [
-  {duration: '2m', target: 25}, // ramp to baseline VUs
-  {duration: '6m', target: 25}, // hold baseline
-  {duration: '2m', target: 55}, // spike (traffic surge)
-  {duration: '2m', target: 25}, // ramp back down
-  {duration: DURATION, target: 25}, // hold until stopped
+  {duration: '2m', target: 55},  // ramp to baseline VUs
+  {duration: '6m', target: 55},  // hold baseline
+  {duration: '2m', target: 120}, // spike (sale event)
+  {duration: '2m', target: 55},  // ramp back down
+  {duration: DURATION, target: 55}, // hold until stopped
 ];
 ```
 
@@ -105,15 +105,15 @@ Green = passing, red = failing in terminal output.
 
 ## Traffic scenario design
 
-| Scenario                | VUs (baseline → spike) | Route                               | What it shows in Prometheus                                     |
-| ----------------------- | ---------------------- | ----------------------------------- | --------------------------------------------------------------- |
-| `get_by_id`             | 25→55                  | `GET /users/:id` (existing IDs)     | Highest volume in `topk()`, cache hit rate ratio                |
-| `list_users`            | 12→28                  | `GET /users`                        | Second in `topk()`, always hits DB                              |
-| `get_user_info`         | 20→45                  | `GET /user/:id/info`                | Heavy read route, ~5% forced 500s with `?error=true`            |
-| `create_user`           | 2→4                    | `POST /users`                       | Low-volume writes, long think time                              |
-| `update_user`           | 1→3                    | `PATCH /users/:id`                  | Occasional updates                                              |
-| `get_404`               | 2→4                    | `GET /users/:id` (non-existent IDs) | `route="unknown"`, `status_code="404"` — 404 rate in dashboards |
-| `health_probe`          | 3 (constant)           | `GET /health`                       | Background noise, flat baseline                                 |
+| Scenario          | VUs (baseline → spike) | Route                               | Ecommerce role / Prometheus                                      |
+| ----------------- | ---------------------- | ----------------------------------- | ----------------------------------------------------------------- |
+| `browse_catalog`  | 55→120                 | `GET /users`                        | Catalog/list ~55%; always hits DB, `topk()`                       |
+| `pdp`             | 28→60                  | `GET /users/:id` (existing IDs)     | Product detail ~25–30%; cache hit rate                            |
+| `pdp_rich`       | 12→28                  | `GET /user/:id/info`                | PDP with extra info ~10–12%; ~5% forced 500s with `?error=true`   |
+| `broken_link`     | 2→5                    | `GET /users/:id` (non-existent IDs) | 404s ~1–2%; `route="unknown"`, `status_code="404"`                |
+| `registration`    | 2→5                    | `POST /users`                       | Sign-up ~1–2%; long think time (8–15s)                            |
+| `profile_update`  | 1→3                    | `PATCH /users/:id`                  | Profile edit &lt;1%; very long think time (15–45s)                 |
+| `health_probe`    | 3 (constant)           | `GET /health`                       | Load balancer probe, flat baseline                               |
 
 ### Timeline
 
