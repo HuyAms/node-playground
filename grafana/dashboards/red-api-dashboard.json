@@ -1,5 +1,6 @@
 {
   "annotations": { "list": [] },
+  "description": "RED metrics (Rate, Errors, Duration) for user-management and user-info. Overview stats per service; Service health as gauges.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
@@ -10,6 +11,80 @@
     {
       "collapsed": false,
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 0,
+      "panels": [],
+      "title": "Service health",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "1 = healthy, 0 = down. Prometheus up metric.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "max": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "green", "value": 1}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 3, "w": 8, "x": 2, "y": 1 },
+      "id": 9,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "up{job=\"user-management\"}", "refId": "A" }
+      ],
+      "title": "user-management (Up)",
+      "type": "gauge"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "1 = healthy, 0 = down. Prometheus up metric.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "max": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "green", "value": 1}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 3, "w": 8, "x": 14, "y": 1 },
+      "id": 19,
+      "options": {
+        "minVizHeight": 75,
+        "minVizWidth": 75,
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "up{job=\"user-info\"}", "refId": "A" }
+      ],
+      "title": "user-info (Up)",
+      "type": "gauge"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 4 },
       "id": 1,
       "panels": [],
       "title": "user-management (RED)",
@@ -17,11 +92,86 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Request rate for this service (5m rate).",
       "fieldConfig": {
-        "defaults": { "unit": "reqps", "color": { "mode": "palette-classic" } },
+        "defaults": { "unit": "reqps", "color": { "mode": "palette-classic" }, "thresholds": { "mode": "absolute", "steps": [{"color": "green", "value": null}] } },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 1 },
+      "gridPos": { "h": 3, "w": 6, "x": 0, "y": 5 },
+      "id": 21,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(http_requests_total{job=\"user-management\"}[5m]))", "refId": "A" }],
+      "title": "Rate (req/s)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "5xx error ratio. Red above 1%.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.01}, {"color": "red", "value": 0.05}] }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 3, "w": 6, "x": 6, "y": 5 },
+      "id": 22,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(http_requests_total{job=\"user-management\", status_code=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"user-management\"}[5m]))", "refId": "A" }],
+      "title": "Error rate (5xx)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "p99 latency.",
+      "fieldConfig": {
+        "defaults": { "unit": "s", "color": { "mode": "palette-classic" }, "thresholds": { "mode": "absolute", "steps": [{"color": "green", "value": null}] } },
+        "overrides": []
+      },
+      "gridPos": { "h": 3, "w": 6, "x": 12, "y": 5 },
+      "id": 24,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"user-management\"}[5m])))", "refId": "A" }],
+      "title": "p99 duration",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Cache hit ratio (hits / (hits + misses)) over 5m. user-management cache.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "color": { "mode": "palette-classic" },
+          "thresholds": { "mode": "absolute", "steps": [{"color": "green", "value": null}] }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 3, "w": 6, "x": 18, "y": 5 },
+      "id": 23,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "sum(rate(cache_hits_total{job=\"user-management\"}[5m])) / (sum(rate(cache_hits_total{job=\"user-management\"}[5m])) + sum(rate(cache_misses_total{job=\"user-management\"}[5m])))",
+          "refId": "A"
+        }
+      ],
+      "title": "Cache hit rate",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Request rate by route from recording rule job:http_requests_total:rate5m.",
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "color": { "mode": "palette-classic" }, "thresholds": { "mode": "absolute", "steps": [{"color": "green", "value": null}] } },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 8, "x": 0, "y": 8 },
       "id": 2,
       "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true } },
       "targets": [
@@ -36,11 +186,25 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "5xx / total. Red above 1%, yellow above 0.5%.",
       "fieldConfig": {
-        "defaults": { "unit": "percentunit", "min": 0, "max": 1, "color": { "mode": "palette-classic" } },
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.005},
+              {"color": "red", "value": 0.01}
+            ]
+          }
+        },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 1 },
+      "gridPos": { "h": 5, "w": 8, "x": 8, "y": 8 },
       "id": 3,
       "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true } },
       "targets": [
@@ -55,11 +219,12 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "p50, p75, p95, p99 from request duration histogram (5m rate).",
       "fieldConfig": {
-        "defaults": { "unit": "s", "color": { "mode": "palette-classic" } },
+        "defaults": { "unit": "s", "color": { "mode": "palette-classic" }, "thresholds": { "mode": "absolute", "steps": [{"color": "green", "value": null}] } },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 },
+      "gridPos": { "h": 5, "w": 8, "x": 16, "y": 8 },
       "id": 4,
       "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true } },
       "targets": [
@@ -72,8 +237,24 @@
       "type": "timeseries"
     },
     {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Current number of requests in flight (concurrency).",
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "palette-classic" }, "thresholds": { "mode": "absolute", "steps": [{"color": "green", "value": null}] } },
+        "overrides": []
+      },
+      "gridPos": { "h": 3, "w": 6, "x": 0, "y": 13 },
+      "id": 10,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(http_requests_in_flight{job=\"user-management\"})", "refId": "A" }
+      ],
+      "title": "Concurrency (in-flight)",
+      "type": "stat"
+    },
+    {
       "collapsed": false,
-      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 },
       "id": 5,
       "panels": [],
       "title": "user-info (RED)",
@@ -81,11 +262,60 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Request rate for this service (5m rate).",
       "fieldConfig": {
-        "defaults": { "unit": "reqps", "color": { "mode": "palette-classic" } },
+        "defaults": { "unit": "reqps", "color": { "mode": "palette-classic" }, "thresholds": { "mode": "absolute", "steps": [{"color": "green", "value": null}] } },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 10 },
+      "gridPos": { "h": 3, "w": 8, "x": 0, "y": 17 },
+      "id": 25,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(http_requests_total{job=\"user-info\"}[5m]))", "refId": "A" }],
+      "title": "Rate (req/s)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "5xx error ratio. Red above 1%.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 0.01}, {"color": "red", "value": 0.05}] }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 3, "w": 8, "x": 8, "y": 17 },
+      "id": 26,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(rate(http_requests_total{job=\"user-info\", status_code=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=\"user-info\"}[5m]))", "refId": "A" }],
+      "title": "Error rate (5xx)",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "p99 latency.",
+      "fieldConfig": {
+        "defaults": { "unit": "s", "color": { "mode": "palette-classic" }, "thresholds": { "mode": "absolute", "steps": [{"color": "green", "value": null}] } },
+        "overrides": []
+      },
+      "gridPos": { "h": 3, "w": 8, "x": 16, "y": 17 },
+      "id": 28,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [{ "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"user-info\"}[5m])))", "refId": "A" }],
+      "title": "p99 duration",
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Request rate by route from recording rule job:http_requests_total:rate5m.",
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "color": { "mode": "palette-classic" }, "thresholds": { "mode": "absolute", "steps": [{"color": "green", "value": null}] } },
+        "overrides": []
+      },
+      "gridPos": { "h": 5, "w": 8, "x": 0, "y": 20 },
       "id": 6,
       "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true } },
       "targets": [
@@ -100,11 +330,25 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "5xx / total. Red above 1%, yellow above 0.5%.",
       "fieldConfig": {
-        "defaults": { "unit": "percentunit", "min": 0, "max": 1, "color": { "mode": "palette-classic" } },
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 0.005},
+              {"color": "red", "value": 0.01}
+            ]
+          }
+        },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 10 },
+      "gridPos": { "h": 5, "w": 8, "x": 8, "y": 20 },
       "id": 7,
       "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true } },
       "targets": [
@@ -119,21 +363,37 @@
     },
     {
       "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "p50, p75, p99 from request duration histogram (5m rate).",
       "fieldConfig": {
-        "defaults": { "unit": "s", "color": { "mode": "palette-classic" } },
+        "defaults": { "unit": "s", "color": { "mode": "palette-classic" }, "thresholds": { "mode": "absolute", "steps": [{"color": "green", "value": null}] } },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 10 },
+      "gridPos": { "h": 5, "w": 8, "x": 16, "y": 20 },
       "id": 8,
       "options": { "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true } },
       "targets": [
         { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "histogram_quantile(0.50, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"user-info\"}[5m])))", "legendFormat": "p50", "refId": "A" },
         { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "histogram_quantile(0.75, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"user-info\"}[5m])))", "legendFormat": "p75", "refId": "B" },
-        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"user-info\"}[5m])))", "legendFormat": "p95", "refId": "C" },
-        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"user-info\"}[5m])))", "legendFormat": "p99", "refId": "D" }
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{job=\"user-info\"}[5m])))", "legendFormat": "p99", "refId": "C" }
       ],
-      "title": "Duration (p50, p75, p95, p99)",
+      "title": "Duration (p50, p75, p99)",
       "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "description": "Current number of requests in flight (concurrency).",
+      "fieldConfig": {
+        "defaults": { "unit": "short", "color": { "mode": "palette-classic" }, "thresholds": { "mode": "absolute", "steps": [{"color": "green", "value": null}] } },
+        "overrides": []
+      },
+      "gridPos": { "h": 3, "w": 6, "x": 0, "y": 25 },
+      "id": 11,
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "auto", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "textMode": "auto" },
+      "targets": [
+        { "datasource": { "type": "prometheus", "uid": "prometheus" }, "expr": "sum(http_requests_in_flight{job=\"user-info\"})", "refId": "A" }
+      ],
+      "title": "Concurrency (in-flight)",
+      "type": "stat"
     }
   ],
   "refresh": "30s",
@@ -145,6 +405,6 @@
   "timepicker": {},
   "title": "RED API Dashboard",
   "uid": "red-api",
-  "version": 1,
+  "version": 5,
   "weekStart": ""
 }
