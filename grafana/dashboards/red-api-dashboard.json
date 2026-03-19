@@ -134,7 +134,7 @@
       "targets": [
         {
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(rate(cache_hits_total{job=~\"$job\"}[5m])) / (sum(rate(cache_hits_total{job=~\"$job\"}[5m])) + sum(rate(cache_misses_total{job=~\"$job\"}[5m])))",
+          "expr": "sum(rate(cache_hits_total{job=~\"$job\", cache=~\"$cache\"}[5m])) / (sum(rate(cache_hits_total{job=~\"$job\", cache=~\"$cache\"}[5m])) + sum(rate(cache_misses_total{job=~\"$job\", cache=~\"$cache\"}[5m])))",
           "refId": "A"
         }
       ],
@@ -255,6 +255,18 @@
         "datasource": { "type": "prometheus", "uid": "prometheus" },
         "query": "label_values(http_requests_total{job=~\"$job\"}, route)",
         "refresh": 2,
+        "includeAll": true,
+        "allValue": ".*",
+        "multi": true,
+        "sort": 1,
+        "current": {}
+      },
+      {
+        "name": "cache",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(cache_hits_total{job=~\"$job\"}, cache)",
+        "refresh": 1,
         "includeAll": true,
         "allValue": ".*",
         "multi": true,
