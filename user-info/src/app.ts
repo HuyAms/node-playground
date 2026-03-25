@@ -4,9 +4,9 @@ import helmet from 'helmet';
 import cors from 'cors';
 import {trace, SpanStatusCode} from '@opentelemetry/api';
 
-import {httpMetrics} from '@node-playground/observability';
+import {httpMetrics, createWideEventMiddleware} from '@node-playground/observability';
 import {registry, httpRequestsTotal, httpRequestsInFlight, httpRequestDuration} from './metrics.js';
-import {httpLogger} from './logger.js';
+import {logger} from './logger.js';
 import {requestId} from './middleware/requestId.js';
 import {errorHandler} from './middleware/errorHandler.js';
 import {NotFoundError} from './errors/index.js';
@@ -33,7 +33,7 @@ export function createApp(): express.Application {
   app.use(express.json());
 
   app.use(requestId);
-  app.use(httpLogger);
+  app.use(createWideEventMiddleware(logger, {ignorePaths: ['/health', '/metrics']}));
   app.use(httpMetrics({httpRequestsTotal, httpRequestsInFlight, httpRequestDuration}));
 
   app.get('/metrics', async (_req, res) => {

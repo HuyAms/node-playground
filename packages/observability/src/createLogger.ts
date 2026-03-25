@@ -1,5 +1,4 @@
 import pino from 'pino';
-import pinoHttp from 'pino-http';
 import type {LoggerOptions} from './types.js';
 
 const REDACT_PATHS = [
@@ -11,10 +10,8 @@ const REDACT_PATHS = [
 ];
 const CENSOR = '[REDACTED]';
 
-const DEFAULT_IGNORE_PATHS = ['/health', '/metrics'];
-
 export function createLogger(options: LoggerOptions) {
-  const {env, logLevel, logFile, lokiUrl, job, ignorePaths = DEFAULT_IGNORE_PATHS} = options;
+  const {env, logLevel, logFile, lokiUrl, job} = options;
 
   const level = logLevel as pino.Level;
   const streams: pino.StreamEntry[] = [];
@@ -43,7 +40,7 @@ export function createLogger(options: LoggerOptions) {
         options: {
           host: lokiUrl,
           labels: {job},
-          propsToLabels: ['level', 'req.method', 'res.statusCode'],
+          propsToLabels: ['level'],
           batching: {interval: 1},
           silenceErrors: false,
         },
@@ -55,6 +52,10 @@ export function createLogger(options: LoggerOptions) {
     {
       level: logLevel,
       name: job,
+      base: {
+        service: job,
+        environment: env,
+      },
       formatters: {
         level: label => ({level: label}),
       },
@@ -63,27 +64,5 @@ export function createLogger(options: LoggerOptions) {
     pino.multistream(streams)
   );
 
-  const httpLogger = pinoHttp({
-    logger: logger,
-    genReqId: req => (req.headers['x-request-id'] as string) ?? crypto.randomUUID(),
-    customProps: req => ({
-      requestId: req.headers['x-request-id'],
-    }),
-    autoLogging: {
-      ignore: req => {
-        const url = req.url ?? '';
-        return ignorePaths.some(path => url === path || url.startsWith(path + '/'));
-      },
-    },
-    serializers: {
-      req(req) {
-        return {method: req.method, url: req.url};
-      },
-      res(res) {
-        return {statusCode: res.statusCode};
-      },
-    },
-  });
-
-  return {logger, httpLogger};
+  return {logger};
 }

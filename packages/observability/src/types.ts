@@ -7,8 +7,6 @@ export interface LoggerOptions {
   lokiUrl?: string;
   /** Loki label for log stream (e.g. 'user-management', 'user-info') */
   job: string;
-  /** Path prefixes to skip for HTTP auto-logging (e.g. ['/health', '/metrics', '/docs']) */
-  ignorePaths?: string[];
 }
 
 export interface CreateMetricsOptions {

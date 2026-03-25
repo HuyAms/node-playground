@@ -1,20 +1,13 @@
 import {Request, Response, NextFunction} from 'express';
+import {enrichWideEvent} from '@node-playground/observability';
 import {AppError} from '../errors/index.js';
-import {logger} from '../logger.js';
 
 /**
  * Centralized error middleware — the single location where errors are
- * serialized to HTTP responses. Key invariants:
+ * serialized to HTTP responses.
  *
- * 1. AppError subclasses are "operational" — known failure modes.
- *    For 5xx we log at error here; for 4xx the throw site may log warn.
- *    This handler serializes the HTTP response.
- *
- * 2. Everything else is an unexpected failure.
- *    Log at error level (with full stack) and respond 500.
- *    We deliberately do NOT expose internal error messages to clients.
- *
- * 3. This is the ONLY place logger.error() is called.
+ * Error context is added to the wide event via enrichWideEvent() and
+ * emitted automatically by the wide event middleware at response finish.
  */
 export function errorHandler(
   err: unknown,
@@ -26,23 +19,18 @@ export function errorHandler(
   const requestId = req.headers['x-request-id'] as string | undefined;
 
   if (err instanceof AppError) {
-    if (err.statusCode >= 500) {
-      logger.error({err, requestId, method: req.method, url: req.url}, err.message);
-    }
+    enrichWideEvent({
+      error: {type: err.constructor.name, message: err.message, statusCode: err.statusCode},
+    });
     res.status(err.statusCode).json(err.serialize(requestId));
     return;
   }
 
-  // Unexpected failure — log everything, expose nothing
-  logger.error(
-    {
-      err,
-      requestId,
-      method: req.method,
-      url: req.url,
-    },
-    err instanceof Error ? err.message : 'Unhandled error'
-  );
+  const message = err instanceof Error ? err.message : 'Unhandled error';
+  const stack = err instanceof Error ? err.stack : undefined;
+  enrichWideEvent({
+    error: {type: 'UnhandledError', message, stack},
+  });
 
   res.status(500).json({
     error: {

@@ -6,10 +6,10 @@ import swaggerUi from 'swagger-ui-express';
 
 import type { UserRepository } from './modules/users/users.repository.js';
 import { createUsersRoutes } from './modules/users/users.routes.js';
-import { httpMetrics } from '@node-playground/observability';
+import { httpMetrics, createWideEventMiddleware } from '@node-playground/observability';
 import { config } from './config.js';
 import { registry, httpRequestsTotal, httpRequestsInFlight, httpRequestDuration } from './shared/metrics.js';
-import { httpLogger } from './shared/logger.js';
+import { logger } from './shared/logger.js';
 import { requestId } from './shared/middleware/requestId.js';
 import { errorHandler } from './shared/middleware/errorHandler.js';
 import {simulateRouter} from './modules/simulate/simulate.routes.js';
@@ -49,8 +49,8 @@ export function createApp(userRepository: UserRepository): express.Application {
   // ------------------------------------------------------------------
   // Request enrichment
   // ------------------------------------------------------------------
-  app.use(requestId); // must come before httpLogger so pino picks up x-request-id
-  app.use(httpLogger);
+  app.use(requestId);
+  app.use(createWideEventMiddleware(logger, {ignorePaths: ['/health', '/metrics', '/docs']}));
   app.use(httpMetrics({ httpRequestsTotal, httpRequestsInFlight, httpRequestDuration }));
 
   // ------------------------------------------------------------------

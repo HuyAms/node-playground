@@ -29,8 +29,7 @@ export class UsersController {
   listUsers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const query = req.query as unknown as PaginationQuery;
-      const requestId = req.headers['x-request-id'] as string | undefined;
-      const result = await this.service.listUsers(query, requestId);
+      const result = await this.service.listUsers(query);
       res.status(200).json(result);
     } catch (err) {
       next(err);
@@ -40,8 +39,7 @@ export class UsersController {
   getUserById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
-      const requestId = req.headers['x-request-id'] as string | undefined;
-      const { user, profile } = await this.service.getUserWithProfile(id, requestId);
+      const { user, profile } = await this.service.getUserWithProfile(id);
       res.status(200).json({ data: { ...user, profile } });
     } catch (err) {
       next(err);
@@ -51,8 +49,7 @@ export class UsersController {
   getUserInfo = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
-      const requestId = req.headers['x-request-id'] as string | undefined;
-      const { user, profile } = await this.service.getUserWithProfile(id, requestId);
+      const { user, profile } = await this.service.getUserWithProfile(id);
 
       if (shouldForceError(req)) {
         throw new Error(FORCED_ERROR_MESSAGE);
@@ -67,8 +64,7 @@ export class UsersController {
   createUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const input = req.body as CreateUserInput;
-      const requestId = req.headers['x-request-id'] as string | undefined;
-      const user = await this.service.createUser(input, requestId);
+      const user = await this.service.createUser(input);
       res.status(201).json({ data: user });
     } catch (err) {
       next(err);
@@ -79,8 +75,7 @@ export class UsersController {
     try {
       const { id } = req.params;
       const input = req.body as UpdateUserInput;
-      const requestId = req.headers['x-request-id'] as string | undefined;
-      const user = await this.service.updateUser(id, input, requestId);
+      const user = await this.service.updateUser(id, input);
       res.status(200).json({ data: user });
     } catch (err) {
       next(err);
@@ -90,8 +85,7 @@ export class UsersController {
   deleteUser = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const { id } = req.params;
-      const requestId = req.headers['x-request-id'] as string | undefined;
-      await this.service.deleteUser(id, requestId);
+      await this.service.deleteUser(id);
       res.status(204).send();
     } catch (err) {
       next(err);
