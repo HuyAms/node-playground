@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/htrinh@alpha-sense.com/**)",
+      "Bash(export PATH=\"/opt/podman/bin:$PATH\")",
+      "Bash(podman:*)",
+      "Bash(brew install:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
